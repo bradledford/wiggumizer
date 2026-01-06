@@ -1,0 +1,47 @@
+{
+  "name": "wiggumizer",
+  "version": "0.1.0",
+  "description": "Ralph Wiggum style AI coding automation - deterministic imperfection meets eventual consistency",
+  "main": "src/index.js",
+  "bin": {
+    "wiggumize": "./bin/wiggumize.js"
+  },
+  "scripts": {
+    "start": "node bin/wiggumize.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ai",
+    "coding",
+    "automation",
+    "ralph",
+    "refactoring",
+    "claude",
+    "gpt",
+    "iterative"
+  ],
+  "author": "Brad Ledford <bradledford@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bradledford/wiggumizer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bradledford/wiggumizer/issues"
+  },
+  "homepage": "https://github.com/bradledford/wiggumizer#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "commander": "^11.1.0",
+    "yaml": "^2.3.4",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
