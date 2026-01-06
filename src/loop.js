@@ -7,6 +7,7 @@ const FileValidator = require('./validator');
 const GitHelper = require('./git-helper');
 const IterationLogger = require('./iteration-logger');
 const FileSelector = require('./file-selector');
+const ConvergenceAnalyzer = require('./convergence-analyzer');
 
 class RalphLoop {
   constructor(options) {
@@ -23,6 +24,12 @@ class RalphLoop {
 
     // Initialize iteration logger
     this.logger = new IterationLogger();
+
+    // Initialize convergence analyzer
+    this.convergence = new ConvergenceAnalyzer({
+      threshold: this.convergenceThreshold,
+      verbose: this.verbose
+    });
 
     // Initialize provider
     const providerName = options.provider || 'claude';
@@ -57,6 +64,7 @@ class RalphLoop {
 
     let noChangeIterations = 0;
     let converged = false;
+    let convergenceReason = '';
 
     while (this.iteration < this.maxIterations) {
       this.iteration++;
@@ -66,6 +74,9 @@ class RalphLoop {
       try {
         // Get current codebase state
         const codebaseContext = this.getCodebaseContext();
+
+        // Update file hashes for convergence detection
+        const hashComparison = this.convergence.updateFileHashes(codebaseContext.files);
 
         // Send to AI provider
         const response = await this.provider.iterate({
@@ -98,8 +109,12 @@ class RalphLoop {
 
         // Apply changes (if not dry run)
         let filesModified = 0;
+        let modifiedFilesList = [];
         if (!this.dryRun && response.changes) {
-          filesModified = this.applyChanges(response.changes);
+          const result = this.applyChanges(response.changes);
+          filesModified = result.count;
+          modifiedFilesList = result.files;
+
           if (filesModified > 0) {
             console.log(chalk.green(`  ✓ Applied changes to ${filesModified} file(s)`));
             this.filesModifiedTotal += filesModified;
@@ -115,21 +130,54 @@ class RalphLoop {
           }
         }
 
+        // Record iteration in convergence analyzer
+        this.convergence.recordIteration(this.iteration, {
+          filesModified,
+          filesList: modifiedFilesList,
+          response: response.raw || response.changes || ''
+        });
+
+        // Check for advanced convergence
+        const convergenceCheck = this.convergence.checkConvergence();
+
+        if (convergenceCheck.converged) {
+          console.log(chalk.green('\n✓ Convergence detected!'));
+          console.log(chalk.dim(`${convergenceCheck.reason} (confidence: ${(convergenceCheck.confidence * 100).toFixed(0)}%)\n`));
+          converged = true;
+          convergenceReason = convergenceCheck.reason;
+
+          // Log iteration
+          this.logger.logIteration(this.iteration, {
+            prompt: this.prompt,
+            response,
+            filesModified,
+            convergence: true,
+            convergenceReason: convergenceCheck.reason,
+            convergenceConfidence: convergenceCheck.confidence
+          });
+
+          break;
+        }
+
+        // Warn about oscillation
+        if (convergenceCheck.oscillation?.detected) {
+          console.log(chalk.yellow(`  ⚠ ${convergenceCheck.oscillation.message}`));
+          console.log(chalk.dim(`    Consider refining your prompt to avoid flip-flopping`));
+        }
+
+        // Show convergence confidence in verbose mode
+        if (this.verbose && convergenceCheck.confidence > 0) {
+          console.log(chalk.dim(`  Convergence confidence: ${(convergenceCheck.confidence * 100).toFixed(0)}%`));
+        }
+
         // Log iteration
         this.logger.logIteration(this.iteration, {
           prompt: this.prompt,
           response,
           filesModified,
-          convergence: false
+          convergence: false,
+          convergenceConfidence: convergenceCheck.confidence
         });
-
-        // Check for convergence based on no file modifications
-        if (noChangeIterations >= 2) {
-          console.log(chalk.green('\n✓ Convergence detected!'));
-          console.log(chalk.dim(`No file modifications for ${noChangeIterations} iterations.\n`));
-          converged = true;
-          break;
-        }
 
         console.log();
 
@@ -160,12 +208,21 @@ class RalphLoop {
     console.log(chalk.dim(`Total files modified: ${this.filesModifiedTotal}`));
     console.log(chalk.dim(`Duration: ${duration}s`));
 
+    if (converged && convergenceReason) {
+      console.log(chalk.dim(`Converged: ${convergenceReason}`));
+    }
+
+    // Get convergence summary
+    const convergenceSummary = this.convergence.getSummary();
+
     // Log session summary
     this.logger.logSummary({
       totalIterations: this.iteration,
       converged,
+      convergenceReason,
       filesModified: this.filesModifiedTotal,
       duration,
+      convergenceSummary,
       config: {
         provider: this.provider.constructor.name,
         maxIterations: this.maxIterations
@@ -229,6 +286,7 @@ class RalphLoop {
     const filePattern = /##\s*File:\s*([^\n]+)\n```[^\n]*\n([\s\S]*?)```/g;
     let match;
     let filesModified = 0;
+    const modifiedFiles = [];
     const backups = new Map(); // Store backups in case we need to rollback
 
     while ((match = filePattern.exec(changesText)) !== null) {
@@ -267,6 +325,7 @@ class RalphLoop {
         }
 
         filesModified++;
+        modifiedFiles.push(filePath);
       } catch (error) {
         console.error(chalk.red(`    ✗ Failed to write ${filePath}: ${error.message}`));
 
@@ -276,6 +335,7 @@ class RalphLoop {
           fs.writeFileSync(backupPath, backupContent, 'utf-8');
         }
         filesModified = 0;
+        modifiedFiles.length = 0;
         break;
       }
     }
@@ -294,7 +354,10 @@ class RalphLoop {
       }
     }
 
-    return filesModified;
+    return {
+      count: filesModified,
+      files: modifiedFiles
+    };
   }
 }
 
