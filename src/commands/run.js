@@ -46,6 +46,8 @@ async function runCommand(cliOptions) {
     convergenceThreshold: config.convergenceThreshold,
     filePatterns: config.files,
     contextLimits: config.context,
+    retry: config.retry,
+    rateLimit: config.rateLimit,
     providerConfig: config.providers
   });
 

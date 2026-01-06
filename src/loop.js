@@ -34,7 +34,16 @@ class RalphLoop {
     // Initialize provider
     const providerName = options.provider || 'claude';
     if (providerName === 'claude') {
-      this.provider = new ClaudeProvider(options.providerConfig?.claude);
+      const providerConfig = {
+        ...(options.providerConfig?.claude || {}),
+        verbose: this.verbose,
+        maxRetries: options.retry?.maxRetries,
+        baseDelay: options.retry?.baseDelay,
+        maxDelay: options.retry?.maxDelay,
+        requestsPerMinute: options.rateLimit?.requestsPerMinute,
+        requestsPerHour: options.rateLimit?.requestsPerHour
+      };
+      this.provider = new ClaudeProvider(providerConfig);
     } else {
       throw new Error(`Provider ${providerName} not yet implemented. Coming soon!`);
     }

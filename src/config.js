@@ -38,6 +38,15 @@ class ConfigLoader {
           '*.log'
         ]
       },
+      retry: {
+        maxRetries: 3,
+        baseDelay: 1000,  // 1 second
+        maxDelay: 30000   // 30 seconds
+      },
+      rateLimit: {
+        requestsPerMinute: 50,
+        requestsPerHour: 1000
+      },
       providers: {
         claude: {
           model: 'claude-opus-4-5-20251101',
@@ -181,6 +190,17 @@ files:
     - "package-lock.json"
     - "yarn.lock"
     - "*.log"
+
+# Retry configuration for API calls
+retry:
+  maxRetries: 3        # Maximum number of retries
+  baseDelay: 1000      # Base delay in milliseconds (1 second)
+  maxDelay: 30000      # Maximum delay in milliseconds (30 seconds)
+
+# Rate limiting configuration
+rateLimit:
+  requestsPerMinute: 50    # Maximum requests per minute
+  requestsPerHour: 1000    # Maximum requests per hour
 
 # Provider-specific configuration
 providers:

@@ -1,143 +1,105 @@
-# Complete Wiggumizer Implementation
+# Wiggumizer v0.2 - Refinement and Testing
 
-You are building Wiggumizer - a CLI tool for Ralph Wiggum style AI coding automation. This is a **meta moment**: you're using Wiggumizer to complete the implementation of Wiggumizer itself!
+You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style iterative AI coding. All core features are complete. Now we focus on **polish, testing, and documentation**.
 
-## Context
+## Current State
 
-Wiggumizer is based on the Ralph technique by Geoffrey Huntley - an iterative loop that repeatedly sends a prompt to an AI to refine code until it converges:
+Wiggumizer v0.1 is feature-complete with:
+- ✅ Full iteration loop with Claude Opus 4.5
+- ✅ Smart file selection (.gitignore, glob patterns, prioritization)
+- ✅ Advanced convergence detection (oscillation, hashing, confidence)
+- ✅ Error handling (retry, backoff, circuit breaker, rate limiting)
+- ✅ Configuration system (.wiggumizer.yml)
+- ✅ Iteration logging and session tracking
+- ✅ Git integration (warnings, auto-commit)
+- ✅ File validation and safety (syntax checking, rollback)
 
-```bash
-while :; do cat PROMPT.md | npx --yes @sourcegraph/amp ; done
-```
+## Goals for v0.2
 
-The current implementation has:
-- ✅ Basic CLI structure (bin/wiggumize.js, src/cli.js)
-- ✅ `wiggumize run` command skeleton
-- ✅ RalphLoop class with basic iteration logic
-- ✅ ClaudeProvider with API integration
-- ✅ Simple file gathering and context building
+### 1. Add Unit Tests
 
-## What Needs to be Implemented
+Create `test/` directory with tests for:
+- **src/convergence-analyzer.js** - Test oscillation detection, hashing, confidence scoring
+- **src/error-handler.js** - Test retry logic, error classification, circuit breaker
+- **src/file-selector.js** - Test glob matching, .gitignore parsing, prioritization
+- **src/config.js** - Test config loading and merging
 
-### 1. File Modification System (CRITICAL)
+Use a simple test framework (Jest or built-in Node test runner).
 
-The `applyChanges()` method in `src/loop.js` is currently a stub. It needs to:
+### 2. Improve Error Messages
 
-- Parse the AI's response to extract file modifications
-- Support multiple output formats from the AI:
-  - Code blocks with file paths: `## File: src/foo.js`
-  - Diff format
-  - Complete file replacements
-- Apply changes safely (create backups, validate syntax)
-- Track what changed for convergence detection
-- Handle file creation, modification, and deletion
+Make error messages more helpful:
+- When API key is missing, show example .env file
+- When PROMPT.md is missing, show example prompt
+- When convergence fails, suggest prompt improvements
+- When oscillation detected, show the conflicting states
 
-**Key requirement:** The AI response format should be flexible but parseable.
+### 3. Add Progress Indicators
 
-### 2. Better Convergence Detection
+Enhance the loop output:
+- Show estimated time remaining (based on average iteration time)
+- Display token usage per iteration (if available from API)
+- Show real-time convergence confidence as it increases
+- Add a summary dashboard at the end
 
-Current convergence detection is naive (just checking for "no changes" text). Improve it to:
+### 4. Add `wiggumize init` Wizard
 
-- Compare actual file changes between iterations
-- Detect oscillation (same changes repeating)
-- Calculate a convergence score based on:
-  - Size of changes
-  - Number of files changed
-  - Similarity to previous iterations
-- Support configurable convergence thresholds
+Make `wiggumize init` interactive:
+- Ask which AI provider to use (Claude/OpenAI)
+- Ask for typical project type (Node.js/Python/etc.)
+- Generate appropriate file patterns
+- Create sample PROMPT.md with examples
+- Validate API key before finishing
 
-### 3. Configuration System
+### 5. Improve Documentation
 
-Implement `.wiggumizer.yml` support:
+Update README.md with:
+- Clear quick start guide
+- Real-world examples (not just theory)
+- Troubleshooting section
+- FAQ about common issues
+- Performance tips (context size, iteration limits)
 
-```yaml
-provider: claude
-max_iterations: 20
-convergence_threshold: 0.02
-files:
-  include:
-    - "src/**/*.js"
-    - "*.md"
-  exclude:
-    - "node_modules/**"
-    - "docs/**"
-```
+### 6. Add Multi-Provider Support
 
-Load from:
-- Project root `.wiggumizer.yml`
-- User home `~/.wiggumizer.yml`
-- Merge with CLI options (CLI takes precedence)
+Complete OpenAI provider implementation:
+- Create `src/providers/openai.js` similar to claude.js
+- Support GPT-5 and GPT-4
+- Handle different token limits
+- Test with both providers
 
-### 4. Smarter File Selection
+## Implementation Philosophy
 
-Current file gathering is too broad. Improve `getRelevantFiles()` to:
+**Keep following Ralph principles:**
+- One improvement per iteration
+- Small, incremental changes
+- Trust the convergence process
+- Don't over-engineer
 
-- Respect `.gitignore` patterns
-- Support glob patterns from config
-- Limit total context size (Claude has token limits)
-- Prioritize recently modified files
-- Allow `--files` flag to specify exact files
-
-### 5. Iteration Logging
-
-Create `.wiggumizer/iterations/` directory and log:
-
-- Each iteration's prompt, response, and changes
-- Timestamps and metadata
-- Convergence metrics
-- Enable replay/debugging of loops
-
-### 6. Error Handling
-
-Add robust error handling:
-
-- API failures (retry with exponential backoff)
-- Rate limiting
-- Syntax errors in generated code (rollback)
-- File permission errors
-- Git conflicts
-
-### 7. Git Integration
-
-Add git utilities:
-
-- Check for uncommitted changes (warn user)
-- Create automatic commits after convergence
-- Support rollback to previous iterations
-- Tag iterations in git history
-
-## Implementation Approach
-
-**Do NOT try to implement everything at once.** Follow the Ralph philosophy:
-
-- Focus on ONE improvement per iteration
-- Start with the most critical: file modification system
-- Let each iteration build on the previous
-- Trust the process to converge
-
-## Constraints
-
-- Keep it simple - no over-engineering
-- Use only existing dependencies (no new npm packages yet)
-- Maintain backward compatibility with current CLI interface
-- Follow existing code style and patterns
-- All code should be well-commented
+**Priority:**
+1. Tests first (validate what we've built)
+2. Error messages (improve user experience)
+3. Documentation (help others use it)
+4. Nice-to-haves (progress indicators, wizard)
 
 ## Success Criteria
 
-When Wiggumizer can:
-- ✅ Read a prompt and current codebase
-- ✅ Send to Claude API
-- ✅ Parse AI response and extract file changes
-- ✅ Apply changes to actual files
-- ✅ Detect convergence accurately
-- ✅ Run iteratively until convergence or max iterations
-- ✅ Create useful logs for debugging
+Wiggumizer v0.2 is complete when:
+- ✅ Core modules have test coverage
+- ✅ Error messages are helpful and actionable
+- ✅ README.md has complete examples
+- ✅ `wiggumize init` is interactive and helpful
+- ✅ OpenAI provider works alongside Claude
 
-Then Wiggumizer v0.1 is complete!
+## Current Files to Focus On
 
-## Meta Note
+Start with whichever makes the most sense:
+- `test/convergence-analyzer.test.js` - Add tests for convergence logic
+- `test/error-handler.test.js` - Add tests for retry and rate limiting
+- `README.md` - Improve with real examples
+- `src/cli.js` - Make init command interactive
+- `src/providers/openai.js` - Add OpenAI support
 
-This is iteration 1 of Wiggumizer building itself. Don't worry about perfection - just make incremental progress. The loop will refine it over iterations.
+**Remember:** You don't need to do everything at once. Pick ONE thing, do it well, let the loop iterate.
 
-**Let's go! 🎯**
+Let's refine this tool! 🎯

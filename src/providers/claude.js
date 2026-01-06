@@ -1,8 +1,9 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const chalk = require('chalk');
+const { ErrorHandler, RateLimiter } = require('../error-handler');
 
 class ClaudeProvider {
-  constructor() {
+  constructor(config = {}) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
@@ -13,7 +14,23 @@ class ClaudeProvider {
     }
 
     this.client = new Anthropic({ apiKey });
-    this.model = 'claude-sonnet-4-20250514';
+    this.model = config.model || 'claude-opus-4-5-20251101';
+    this.maxTokens = config.maxTokens || 8192;
+
+    // Initialize error handler
+    this.errorHandler = new ErrorHandler({
+      maxRetries: config.maxRetries || 3,
+      baseDelay: 1000,
+      maxDelay: 30000,
+      verbose: config.verbose || false
+    });
+
+    // Initialize rate limiter
+    this.rateLimiter = new RateLimiter({
+      requestsPerMinute: config.requestsPerMinute || 50,
+      requestsPerHour: config.requestsPerHour || 1000,
+      verbose: config.verbose || false
+    });
   }
 
   async iterate({ prompt, context, iteration }) {
@@ -21,10 +38,15 @@ class ClaudeProvider {
     const systemPrompt = this.buildSystemPrompt();
     const userMessage = this.buildUserMessage(prompt, context, iteration);
 
-    try {
+    // Apply rate limiting and retry logic
+    return await this.errorHandler.executeWithRetry(async () => {
+      // Wait for rate limit if needed
+      await this.rateLimiter.waitIfNeeded();
+
+      // Make API call
       const response = await this.client.messages.create({
         model: this.model,
-        max_tokens: 4096,
+        max_tokens: this.maxTokens,
         system: systemPrompt,
         messages: [{
           role: 'user',
@@ -44,10 +66,7 @@ class ClaudeProvider {
         summary: this.extractSummary(content),
         raw: content
       };
-
-    } catch (error) {
-      throw new Error(`Claude API error: ${error.message}`);
-    }
+    }, `Claude API call (iteration ${iteration})`);
   }
 
   buildSystemPrompt() {
