@@ -45,6 +45,7 @@ async function runCommand(cliOptions) {
     autoCommit: config.autoCommit,
     convergenceThreshold: config.convergenceThreshold,
     filePatterns: config.files,
+    contextLimits: config.context,
     providerConfig: config.providers
   });
 

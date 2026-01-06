@@ -5,6 +5,8 @@ const ora = require('ora');
 const ClaudeProvider = require('./providers/claude');
 const FileValidator = require('./validator');
 const GitHelper = require('./git-helper');
+const IterationLogger = require('./iteration-logger');
+const FileSelector = require('./file-selector');
 
 class RalphLoop {
   constructor(options) {
@@ -15,7 +17,12 @@ class RalphLoop {
     this.autoCommit = options.autoCommit || false;
     this.convergenceThreshold = options.convergenceThreshold || 0.02;
     this.filePatterns = options.filePatterns || {};
+    this.contextLimits = options.contextLimits || { maxSize: 100000, maxFiles: 50 };
     this.iteration = 0;
+    this.filesModifiedTotal = 0;
+
+    // Initialize iteration logger
+    this.logger = new IterationLogger();
 
     // Initialize provider
     const providerName = options.provider || 'claude';
@@ -29,6 +36,8 @@ class RalphLoop {
   async run() {
     console.log(chalk.bold('Starting Ralph loop...\n'));
 
+    const startTime = Date.now();
+
     // Warn if git repo is dirty
     GitHelper.warnIfDirty();
 
@@ -41,9 +50,13 @@ class RalphLoop {
     } else {
       console.log(chalk.dim('ℹ Auto-commit disabled - Review changes with: git diff'));
     }
+
+    // Show log location
+    console.log(chalk.dim(`ℹ Logging to: ${this.logger.sessionDir}`));
     console.log();
 
     let noChangeIterations = 0;
+    let converged = false;
 
     while (this.iteration < this.maxIterations) {
       this.iteration++;
@@ -67,6 +80,16 @@ class RalphLoop {
         if (!response.hasChanges) {
           console.log(chalk.green('\n✓ Convergence detected!'));
           console.log(chalk.dim(`No changes after ${this.iteration} iterations.\n`));
+
+          // Log iteration
+          this.logger.logIteration(this.iteration, {
+            prompt: this.prompt,
+            response,
+            filesModified: 0,
+            convergence: true
+          });
+
+          converged = true;
           break;
         }
 
@@ -79,6 +102,7 @@ class RalphLoop {
           filesModified = this.applyChanges(response.changes);
           if (filesModified > 0) {
             console.log(chalk.green(`  ✓ Applied changes to ${filesModified} file(s)`));
+            this.filesModifiedTotal += filesModified;
             noChangeIterations = 0;
           } else {
             console.log(chalk.yellow(`  ⚠ No files were modified`));
@@ -91,10 +115,19 @@ class RalphLoop {
           }
         }
 
+        // Log iteration
+        this.logger.logIteration(this.iteration, {
+          prompt: this.prompt,
+          response,
+          filesModified,
+          convergence: false
+        });
+
         // Check for convergence based on no file modifications
         if (noChangeIterations >= 2) {
           console.log(chalk.green('\n✓ Convergence detected!'));
           console.log(chalk.dim(`No file modifications for ${noChangeIterations} iterations.\n`));
+          converged = true;
           break;
         }
 
@@ -102,6 +135,15 @@ class RalphLoop {
 
       } catch (error) {
         spinner.fail(`Iteration ${this.iteration} failed`);
+
+        // Log error
+        this.logger.logIteration(this.iteration, {
+          prompt: this.prompt,
+          response: null,
+          filesModified: 0,
+          error: error.message
+        });
+
         throw error;
       }
     }
@@ -111,8 +153,29 @@ class RalphLoop {
       console.log(chalk.dim('You may want to refine your prompt and try again.\n'));
     }
 
+    const duration = Math.round((Date.now() - startTime) / 1000);
+
     console.log(chalk.bold.green('Ralph loop complete!'));
     console.log(chalk.dim(`Total iterations: ${this.iteration}`));
+    console.log(chalk.dim(`Total files modified: ${this.filesModifiedTotal}`));
+    console.log(chalk.dim(`Duration: ${duration}s`));
+
+    // Log session summary
+    this.logger.logSummary({
+      totalIterations: this.iteration,
+      converged,
+      filesModified: this.filesModifiedTotal,
+      duration,
+      config: {
+        provider: this.provider.constructor.name,
+        maxIterations: this.maxIterations
+      }
+    });
+
+    // Show logs location
+    console.log();
+    console.log(chalk.blue('Session logs:') + chalk.dim(` ${this.logger.sessionDir}`));
+    console.log(chalk.dim('View with: wiggumize logs'));
 
     // Remind user to review changes if not auto-committing
     if (!this.autoCommit && GitHelper.isGitRepo() && GitHelper.hasUncommittedChanges()) {
@@ -126,72 +189,34 @@ class RalphLoop {
   }
 
   getCodebaseContext() {
-    // For now, just get the current directory listing
-    // In a full implementation, this would be more sophisticated
     const cwd = process.cwd();
-    const files = this.getRelevantFiles(cwd);
+
+    // Use FileSelector for intelligent file selection
+    const selector = new FileSelector({
+      cwd,
+      include: this.filePatterns.include,
+      exclude: this.filePatterns.exclude,
+      respectGitignore: true,
+      maxContextSize: this.contextLimits.maxSize || 100000,
+      maxFiles: this.contextLimits.maxFiles || 50,
+      verbose: this.verbose
+    });
+
+    const files = selector.getFilesWithContent();
+
+    if (this.verbose) {
+      const stats = selector.getStats();
+      console.log(chalk.dim(`  Selected ${stats.fileCount} files (${Math.round(stats.totalSize / 1024)}KB)`));
+    }
 
     const context = {
       cwd,
-      files: files.map(f => ({
-        path: f,
-        content: fs.readFileSync(path.join(cwd, f), 'utf-8')
-      }))
+      files
     };
 
     return context;
   }
 
-  getRelevantFiles(dir, basePath = '') {
-    // Use exclude patterns from config, or defaults
-    const excludePatterns = this.filePatterns.exclude || [
-      'node_modules',
-      '.git',
-      'dist',
-      'build',
-      '.wiggumizer',
-      'docs',
-      'coverage',
-      '*.min.js',
-      'package-lock.json'
-    ];
-
-    let files = [];
-    const items = fs.readdirSync(dir);
-
-    for (const item of items) {
-      const fullPath = path.join(dir, item);
-      const relativePath = path.join(basePath, item);
-
-      // Check if item matches any exclude pattern
-      const isExcluded = excludePatterns.some(pattern => {
-        // Simple pattern matching (just check if pattern is in path)
-        if (pattern.endsWith('/**')) {
-          return relativePath.startsWith(pattern.slice(0, -3));
-        }
-        if (pattern.startsWith('*.')) {
-          return relativePath.endsWith(pattern.slice(1));
-        }
-        return relativePath.includes(pattern);
-      });
-
-      if (isExcluded) continue;
-
-      const stat = fs.statSync(fullPath);
-
-      if (stat.isDirectory()) {
-        files = files.concat(this.getRelevantFiles(fullPath, relativePath));
-      } else if (stat.isFile()) {
-        // Only include source files
-        const ext = path.extname(item);
-        if (['.js', '.ts', '.py', '.md', '.json', '.yml', '.yaml'].includes(ext)) {
-          files.push(relativePath);
-        }
-      }
-    }
-
-    return files;
-  }
 
   applyChanges(changesText) {
     // Parse Claude's response to extract file modifications

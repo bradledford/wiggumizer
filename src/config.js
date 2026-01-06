@@ -17,27 +17,35 @@ class ConfigLoader {
       autoCommit: false,
       verbose: false,
       dryRun: false,
+      context: {
+        maxSize: 100000, // 100KB max context size
+        maxFiles: 50     // Max 50 files
+      },
       files: {
-        include: ['**/*.js', '**/*.ts', '**/*.py', '**/*.md', '**/*.json', '**/*.yml', '**/*.yaml'],
+        include: ['**/*'], // Include all files, filter by extension in FileSelector
         exclude: [
           'node_modules/**',
           '.git/**',
           'dist/**',
           'build/**',
           '.wiggumizer/**',
+          '.claude/**',
+          'docs/**',
           'coverage/**',
           '*.min.js',
-          'package-lock.json'
+          'package-lock.json',
+          'yarn.lock',
+          '*.log'
         ]
       },
       providers: {
         claude: {
-          model: 'claude-sonnet-4-20250514',
-          maxTokens: 4096
+          model: 'claude-opus-4-5-20251101',
+          maxTokens: 8192
         },
         openai: {
-          model: 'gpt-4-turbo',
-          maxTokens: 4096
+          model: 'gpt-5',
+          maxTokens: 8192
         }
       }
     };
@@ -145,29 +153,44 @@ convergenceThreshold: 0.02
 # Automatically commit changes after each iteration
 autoCommit: false
 
+# Context limits
+context:
+  maxSize: 100000  # Maximum context size in bytes (100KB)
+  maxFiles: 50     # Maximum number of files to include
+
 # File patterns
+# Note: .gitignore is automatically respected
 files:
   include:
-    - "src/**/*.js"
-    - "src/**/*.ts"
-    - "*.md"
+    - "**/*"  # Include all files (filtered by default extensions)
+    # Or specify exact patterns:
+    # - "src/**/*.js"
+    # - "src/**/*.ts"
+    # - "*.md"
   exclude:
     - "node_modules/**"
     - ".git/**"
     - "dist/**"
     - "build/**"
+    - ".wiggumizer/**"
+    - ".claude/**"
+    - "docs/**"
+    - "coverage/**"
     - "*.test.js"
     - "*.min.js"
+    - "package-lock.json"
+    - "yarn.lock"
+    - "*.log"
 
 # Provider-specific configuration
 providers:
   claude:
-    model: claude-sonnet-4-20250514
-    maxTokens: 4096
+    model: claude-opus-4-5-20251101
+    maxTokens: 8192
 
   openai:
-    model: gpt-4-turbo
-    maxTokens: 4096
+    model: gpt-5
+    maxTokens: 8192
 `;
   }
 

@@ -80,6 +80,17 @@ program
     console.log(chalk.yellow('Template management coming soon!'));
   });
 
+// Logs command - view iteration logs
+program
+  .command('logs')
+  .description('View iteration logs from previous runs')
+  .option('-s, --session <id>', 'View specific session')
+  .option('-i, --iteration <num>', 'View specific iteration (requires --session)')
+  .action(async (options) => {
+    const logsCommand = require('./commands/logs');
+    await logsCommand(options);
+  });
+
 // Doctor command - diagnose issues
 program
   .command('doctor')
