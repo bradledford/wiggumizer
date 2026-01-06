@@ -24,6 +24,8 @@ class RalphLoop {
   async run() {
     console.log(chalk.bold('Starting Ralph loop...\n'));
 
+    let noChangeIterations = 0;
+
     while (this.iteration < this.maxIterations) {
       this.iteration++;
 
@@ -49,19 +51,32 @@ class RalphLoop {
           break;
         }
 
-        // Display changes
-        if (this.verbose) {
-          console.log(chalk.dim('\n  Changes:'));
-          console.log(chalk.dim(`  ${response.summary}`));
-        }
+        // Display changes summary
+        console.log(chalk.dim(`  ${response.summary}`));
 
         // Apply changes (if not dry run)
+        let filesModified = 0;
         if (!this.dryRun && response.changes) {
-          this.applyChanges(response.changes);
-          console.log(chalk.green(`  ✓ Applied changes`));
+          filesModified = this.applyChanges(response.changes);
+          if (filesModified > 0) {
+            console.log(chalk.green(`  ✓ Applied changes to ${filesModified} file(s)`));
+            noChangeIterations = 0;
+          } else {
+            console.log(chalk.yellow(`  ⚠ No files were modified`));
+            noChangeIterations++;
+          }
         } else if (this.dryRun) {
           console.log(chalk.yellow(`  ⚠ Dry run - changes not applied`));
-          console.log(chalk.dim(`\n${response.changes}\n`));
+          if (this.verbose) {
+            console.log(chalk.dim(`\n${response.changes}\n`));
+          }
+        }
+
+        // Check for convergence based on no file modifications
+        if (noChangeIterations >= 2) {
+          console.log(chalk.green('\n✓ Convergence detected!'));
+          console.log(chalk.dim(`No file modifications for ${noChangeIterations} iterations.\n`));
+          break;
         }
 
         console.log();
@@ -135,17 +150,50 @@ class RalphLoop {
   }
 
   applyChanges(changesText) {
-    // This is a simplified version
-    // A full implementation would parse the AI's response and apply diffs
-    // For now, we'll just log that changes would be applied
+    // Parse Claude's response to extract file modifications
+    // Look for patterns like:
+    // ## File: path/to/file.js
+    // ```javascript
+    // file contents
+    // ```
 
-    if (this.verbose) {
-      console.log(chalk.dim('\n  Changes to apply:'));
-      console.log(chalk.dim(changesText));
+    const filePattern = /##\s*File:\s*([^\n]+)\n```[^\n]*\n([\s\S]*?)```/g;
+    let match;
+    let filesModified = 0;
+
+    while ((match = filePattern.exec(changesText)) !== null) {
+      const filePath = match[1].trim();
+      const fileContent = match[2];
+
+      try {
+        const fullPath = path.join(process.cwd(), filePath);
+
+        // Ensure directory exists
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        // Write the file
+        fs.writeFileSync(fullPath, fileContent, 'utf-8');
+
+        if (this.verbose) {
+          console.log(chalk.dim(`    Modified: ${filePath}`));
+        }
+
+        filesModified++;
+      } catch (error) {
+        console.error(chalk.red(`    ✗ Failed to write ${filePath}: ${error.message}`));
+      }
     }
 
-    // TODO: Implement actual file modifications
-    // This will be filled in by Wiggumizer itself!
+    if (filesModified === 0 && this.verbose) {
+      console.log(chalk.yellow('    ⚠ No file modifications detected in response'));
+      console.log(chalk.dim('\n  Raw response:'));
+      console.log(chalk.dim(changesText.substring(0, 500) + '...'));
+    }
+
+    return filesModified;
   }
 }
 

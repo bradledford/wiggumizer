@@ -65,10 +65,32 @@ Guidelines:
 - Follow the existing code style and patterns
 - Be conservative - prefer small improvements that accumulate
 
-Output format:
-- Start with a brief summary of what you're changing
-- Then provide the complete modified file contents
-- If no changes are needed, just say "NO CHANGES NEEDED"`;
+CRITICAL - Output format (you MUST follow this exactly):
+1. Start with a brief summary of what you're changing
+2. For each file you're modifying, use this EXACT format:
+
+## File: path/to/file.js
+\`\`\`javascript
+complete file contents here
+\`\`\`
+
+3. Include the COMPLETE file contents, not just the changes
+4. Use the correct language identifier in the code fence (javascript, python, etc.)
+5. If no changes are needed, respond with only "NO CHANGES NEEDED"
+
+Example response:
+Improving error handling in authentication module.
+
+## File: src/auth.js
+\`\`\`javascript
+const bcrypt = require('bcrypt');
+
+async function authenticate(username, password) {
+  // Complete file contents...
+}
+
+module.exports = { authenticate };
+\`\`\``;
   }
 
   buildUserMessage(prompt, context, iteration) {
