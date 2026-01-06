@@ -3,6 +3,8 @@ const path = require('path');
 const chalk = require('chalk');
 const ora = require('ora');
 const ClaudeProvider = require('./providers/claude');
+const FileValidator = require('./validator');
+const GitHelper = require('./git-helper');
 
 class RalphLoop {
   constructor(options) {
@@ -23,6 +25,12 @@ class RalphLoop {
 
   async run() {
     console.log(chalk.bold('Starting Ralph loop...\n'));
+
+    // Warn if git repo is dirty
+    GitHelper.warnIfDirty();
+
+    // Store initial commit for rollback
+    const initialCommit = GitHelper.getCurrentCommit();
 
     let noChangeIterations = 0;
 
@@ -160,6 +168,7 @@ class RalphLoop {
     const filePattern = /##\s*File:\s*([^\n]+)\n```[^\n]*\n([\s\S]*?)```/g;
     let match;
     let filesModified = 0;
+    const backups = new Map(); // Store backups in case we need to rollback
 
     while ((match = filePattern.exec(changesText)) !== null) {
       const filePath = match[1].trim();
@@ -167,6 +176,21 @@ class RalphLoop {
 
       try {
         const fullPath = path.join(process.cwd(), filePath);
+
+        // Validate file content before writing
+        const validation = FileValidator.validate(filePath, fileContent);
+        if (!validation.valid) {
+          console.error(chalk.red(`    ✗ Validation failed for ${filePath}`));
+          console.error(chalk.dim(`      ${validation.details}`));
+          console.log(chalk.yellow('      Skipping this file to prevent breaking changes'));
+          continue; // Skip this file
+        }
+
+        // Backup existing file
+        if (fs.existsSync(fullPath)) {
+          const backup = fs.readFileSync(fullPath, 'utf-8');
+          backups.set(fullPath, backup);
+        }
 
         // Ensure directory exists
         const dir = path.dirname(fullPath);
@@ -184,6 +208,14 @@ class RalphLoop {
         filesModified++;
       } catch (error) {
         console.error(chalk.red(`    ✗ Failed to write ${filePath}: ${error.message}`));
+
+        // Rollback any files we've modified so far
+        console.log(chalk.yellow('    Rolling back changes...'));
+        for (const [backupPath, backupContent] of backups) {
+          fs.writeFileSync(backupPath, backupContent, 'utf-8');
+        }
+        filesModified = 0;
+        break;
       }
     }
 
@@ -191,6 +223,11 @@ class RalphLoop {
       console.log(chalk.yellow('    ⚠ No file modifications detected in response'));
       console.log(chalk.dim('\n  Raw response:'));
       console.log(chalk.dim(changesText.substring(0, 500) + '...'));
+    }
+
+    // Create git backup if in a repo and files were modified
+    if (filesModified > 0 && GitHelper.isGitRepo()) {
+      GitHelper.createBackupCommit(this.iteration);
     }
 
     return filesModified;
