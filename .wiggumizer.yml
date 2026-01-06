@@ -1,0 +1,39 @@
+# Wiggumizer Configuration
+# See: https://github.com/bradledford/wiggumizer#configuration
+
+# Default AI provider
+provider: claude
+
+# Maximum iterations before stopping
+maxIterations: 20
+
+# Convergence threshold (0.0 to 1.0)
+# Lower = more strict convergence detection
+convergenceThreshold: 0.02
+
+# Automatically commit changes after each iteration
+autoCommit: false
+
+# File patterns
+files:
+  include:
+    - "src/**/*.js"
+    - "src/**/*.ts"
+    - "*.md"
+  exclude:
+    - "node_modules/**"
+    - ".git/**"
+    - "dist/**"
+    - "build/**"
+    - "*.test.js"
+    - "*.min.js"
+
+# Provider-specific configuration
+providers:
+  claude:
+    model: claude-sonnet-4-20250514
+    maxTokens: 4096
+
+  openai:
+    model: gpt-4-turbo
+    maxTokens: 4096

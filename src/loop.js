@@ -13,12 +13,14 @@ class RalphLoop {
     this.verbose = options.verbose || false;
     this.dryRun = options.dryRun || false;
     this.autoCommit = options.autoCommit || false;
+    this.convergenceThreshold = options.convergenceThreshold || 0.02;
+    this.filePatterns = options.filePatterns || {};
     this.iteration = 0;
 
     // Initialize provider
     const providerName = options.provider || 'claude';
     if (providerName === 'claude') {
-      this.provider = new ClaudeProvider();
+      this.provider = new ClaudeProvider(options.providerConfig?.claude);
     } else {
       throw new Error(`Provider ${providerName} not yet implemented. Coming soon!`);
     }
@@ -141,14 +143,17 @@ class RalphLoop {
   }
 
   getRelevantFiles(dir, basePath = '') {
-    // Simple file gathering - exclude common directories
-    const exclude = [
+    // Use exclude patterns from config, or defaults
+    const excludePatterns = this.filePatterns.exclude || [
       'node_modules',
       '.git',
       'dist',
       'build',
       '.wiggumizer',
-      'docs'
+      'docs',
+      'coverage',
+      '*.min.js',
+      'package-lock.json'
     ];
 
     let files = [];
@@ -158,7 +163,19 @@ class RalphLoop {
       const fullPath = path.join(dir, item);
       const relativePath = path.join(basePath, item);
 
-      if (exclude.includes(item)) continue;
+      // Check if item matches any exclude pattern
+      const isExcluded = excludePatterns.some(pattern => {
+        // Simple pattern matching (just check if pattern is in path)
+        if (pattern.endsWith('/**')) {
+          return relativePath.startsWith(pattern.slice(0, -3));
+        }
+        if (pattern.startsWith('*.')) {
+          return relativePath.endsWith(pattern.slice(1));
+        }
+        return relativePath.includes(pattern);
+      });
+
+      if (isExcluded) continue;
 
       const stat = fs.statSync(fullPath);
 

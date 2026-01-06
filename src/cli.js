@@ -33,10 +33,43 @@ program
 program
   .command('init')
   .description('Initialize Wiggumizer configuration')
-  .action(async () => {
-    console.log(chalk.blue('🎯 Wiggumizer initialization'));
-    console.log(chalk.yellow('\nThis will be implemented by Wiggumizer itself!'));
-    console.log(chalk.dim('Coming soon after we bootstrap the run command...\n'));
+  .option('--force', 'Overwrite existing .wiggumizer.yml')
+  .action(async (options) => {
+    const ConfigLoader = require('./config');
+    const fs = require('fs');
+    const path = require('path');
+
+    console.log(chalk.blue('🎯 Initializing Wiggumizer\n'));
+
+    const configPath = path.join(process.cwd(), '.wiggumizer.yml');
+
+    // Check if config already exists
+    if (fs.existsSync(configPath) && !options.force) {
+      console.log(chalk.yellow('⚠ .wiggumizer.yml already exists'));
+      console.log(chalk.dim('Use --force to overwrite\n'));
+      process.exit(1);
+    }
+
+    try {
+      if (options.force && fs.existsSync(configPath)) {
+        // Overwrite
+        fs.writeFileSync(configPath, ConfigLoader.generateDefaultConfig(), 'utf-8');
+        console.log(chalk.green('✓ Overwrote .wiggumizer.yml'));
+      } else {
+        ConfigLoader.createProjectConfig();
+        console.log(chalk.green('✓ Created .wiggumizer.yml'));
+      }
+
+      console.log(chalk.dim(`  ${configPath}\n`));
+      console.log(chalk.blue('Next steps:'));
+      console.log(chalk.dim('  1. Edit .wiggumizer.yml to customize settings'));
+      console.log(chalk.dim('  2. Set your API key: export ANTHROPIC_API_KEY=...'));
+      console.log(chalk.dim('  3. Create PROMPT.md with your instructions'));
+      console.log(chalk.dim('  4. Run: wiggumize run\n'));
+    } catch (error) {
+      console.error(chalk.red('✗ Failed to create config:'), error.message);
+      process.exit(1);
+    }
   });
 
 // Template command - manage templates
