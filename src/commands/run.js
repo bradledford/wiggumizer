@@ -34,7 +34,8 @@ async function runCommand(options) {
     provider: options.provider,
     maxIterations: parseInt(options.maxIterations),
     verbose: options.verbose,
-    dryRun: options.dryRun
+    dryRun: options.dryRun,
+    autoCommit: options.autoCommit || false
   });
 
   try {

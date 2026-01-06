@@ -23,6 +23,7 @@ program
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('--dry-run', 'Show what would change without modifying files')
+  .option('--auto-commit', 'Automatically commit changes after each iteration')
   .action(async (options) => {
     const runCommand = require('./commands/run');
     await runCommand(options);

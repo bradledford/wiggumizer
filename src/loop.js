@@ -12,6 +12,7 @@ class RalphLoop {
     this.maxIterations = options.maxIterations || 20;
     this.verbose = options.verbose || false;
     this.dryRun = options.dryRun || false;
+    this.autoCommit = options.autoCommit || false;
     this.iteration = 0;
 
     // Initialize provider
@@ -31,6 +32,14 @@ class RalphLoop {
 
     // Store initial commit for rollback
     const initialCommit = GitHelper.getCurrentCommit();
+
+    // Show auto-commit status
+    if (this.autoCommit) {
+      console.log(chalk.blue('ℹ Auto-commit enabled') + chalk.dim(' - Changes will be committed after each iteration'));
+    } else {
+      console.log(chalk.dim('ℹ Auto-commit disabled - Review changes with: git diff'));
+    }
+    console.log();
 
     let noChangeIterations = 0;
 
@@ -101,7 +110,17 @@ class RalphLoop {
     }
 
     console.log(chalk.bold.green('Ralph loop complete!'));
-    console.log(chalk.dim(`Total iterations: ${this.iteration}\n`));
+    console.log(chalk.dim(`Total iterations: ${this.iteration}`));
+
+    // Remind user to review changes if not auto-committing
+    if (!this.autoCommit && GitHelper.isGitRepo() && GitHelper.hasUncommittedChanges()) {
+      console.log();
+      console.log(chalk.blue('Next steps:'));
+      console.log(chalk.dim('  git diff          # Review changes'));
+      console.log(chalk.dim('  git add .         # Stage changes'));
+      console.log(chalk.dim('  git commit -m "Your message"'));
+    }
+    console.log();
   }
 
   getCodebaseContext() {
@@ -225,9 +244,12 @@ class RalphLoop {
       console.log(chalk.dim(changesText.substring(0, 500) + '...'));
     }
 
-    // Create git backup if in a repo and files were modified
-    if (filesModified > 0 && GitHelper.isGitRepo()) {
-      GitHelper.createBackupCommit(this.iteration);
+    // Create git backup if in a repo and files were modified (only if auto-commit is enabled)
+    if (filesModified > 0 && this.autoCommit && GitHelper.isGitRepo()) {
+      const committed = GitHelper.createBackupCommit(this.iteration);
+      if (committed && this.verbose) {
+        console.log(chalk.dim(`    Git: Auto-committed iteration ${this.iteration}`));
+      }
     }
 
     return filesModified;
