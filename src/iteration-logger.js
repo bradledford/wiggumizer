@@ -57,6 +57,8 @@ class IterationLogger {
       timestamp: new Date().toISOString(),
       totalIterations: data.totalIterations,
       converged: data.converged,
+      convergenceReason: data.convergenceReason,
+      convergenceSummary: data.convergenceSummary,
       filesModified: data.filesModified || 0,
       duration: data.duration,
       config: data.config

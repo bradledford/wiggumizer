@@ -6,7 +6,13 @@ const templates = {
   blank: {
     name: 'Blank Template',
     description: 'Start from scratch',
-    content: `# Project Improvement
+    content: `---
+issue:
+ticket:
+type: improvement
+---
+
+# Project Improvement
 
 Describe what you want to improve or build in your codebase.
 
@@ -29,7 +35,13 @@ Any additional context the AI should know about your project.
   refactor: {
     name: 'Refactoring',
     description: 'Modernize or clean up existing code',
-    content: `# Refactoring Task
+    content: `---
+issue:
+ticket:
+type: refactor
+---
+
+# Refactoring Task
 
 ## What to Refactor
 
@@ -58,7 +70,13 @@ Describe the code that needs refactoring (e.g., "the authentication module", "al
   bugfix: {
     name: 'Bug Fix',
     description: 'Fix a specific bug or issue',
-    content: `# Bug Fix
+    content: `---
+issue:
+ticket:
+type: bugfix
+---
+
+# Bug Fix
 
 ## Problem
 
@@ -84,7 +102,13 @@ Which files/modules are likely affected?
   feature: {
     name: 'New Feature',
     description: 'Add new functionality',
-    content: `# New Feature
+    content: `---
+issue:
+ticket:
+type: feature
+---
+
+# New Feature
 
 ## Feature Description
 
@@ -111,7 +135,13 @@ What does "done" look like?
   testing: {
     name: 'Add Tests',
     description: 'Add or improve test coverage',
-    content: `# Add Test Coverage
+    content: `---
+issue:
+ticket:
+type: testing
+---
+
+# Add Test Coverage
 
 ## What to Test
 
@@ -136,7 +166,13 @@ Aim for what % coverage?
   documentation: {
     name: 'Documentation',
     description: 'Improve code documentation',
-    content: `# Documentation Improvement
+    content: `---
+issue:
+ticket:
+type: documentation
+---
+
+# Documentation Improvement
 
 ## What Needs Documentation
 
@@ -159,7 +195,13 @@ Who is the documentation for? (developers, end users, etc.)
   typescript: {
     name: 'TypeScript Migration',
     description: 'Convert JavaScript to TypeScript',
-    content: `# TypeScript Migration
+    content: `---
+issue:
+ticket:
+type: refactor
+---
+
+# TypeScript Migration
 
 ## Files to Convert
 

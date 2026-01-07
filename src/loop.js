@@ -87,7 +87,7 @@ class RalphLoop {
         // Update file hashes for convergence detection
         const hashComparison = this.convergence.updateFileHashes(codebaseContext.files);
 
-        // Send to AI provider
+        // Send to AI provider (prompt stays constant - true Ralph philosophy)
         const response = await this.provider.iterate({
           prompt: this.prompt,
           context: codebaseContext,
@@ -252,6 +252,17 @@ class RalphLoop {
       console.log(chalk.dim('  git commit -m "Your message"'));
     }
     console.log();
+
+    // Return summary data for CHANGELOG generation
+    return {
+      totalIterations: this.iteration,
+      filesModified: this.filesModifiedTotal,
+      duration,
+      converged,
+      convergenceReason,
+      convergenceSummary,
+      sessionDir: this.logger.sessionDir
+    };
   }
 
   getCodebaseContext() {
@@ -279,6 +290,47 @@ class RalphLoop {
       cwd,
       files
     };
+
+    // Add git context for self-discovery (true Ralph philosophy)
+    if (GitHelper.isGitRepo()) {
+      const { execSync } = require('child_process');
+
+      try {
+        // Get recent commit history (shows what was done in auto-commit iterations)
+        const gitLog = execSync('git log --oneline -10 --decorate', {
+          encoding: 'utf-8',
+          cwd
+        }).trim();
+        if (gitLog) {
+          context.gitLog = gitLog;
+        }
+
+        // Get current git status
+        const gitStatus = execSync('git status --short', {
+          encoding: 'utf-8',
+          cwd
+        }).trim();
+        if (gitStatus) {
+          context.gitStatus = gitStatus;
+        }
+      } catch (error) {
+        // Git commands failed - not critical, continue without git context
+        if (this.verbose) {
+          console.log(chalk.dim('  Could not fetch git context'));
+        }
+      }
+    }
+
+    // Add breadcrumbs file if it exists (Claude's notes to itself)
+    const breadcrumbsPath = path.join(cwd, '.ralph-notes.md');
+    if (fs.existsSync(breadcrumbsPath)) {
+      try {
+        const breadcrumbs = fs.readFileSync(breadcrumbsPath, 'utf-8');
+        context.breadcrumbs = breadcrumbs;
+      } catch (error) {
+        // Not critical if we can't read it
+      }
+    }
 
     return context;
   }

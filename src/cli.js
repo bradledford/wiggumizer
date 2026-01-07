@@ -112,6 +112,19 @@ program
     await logsCommand(options);
   });
 
+// Summary command - generate CHANGELOG from logs
+program
+  .command('summary')
+  .description('Generate CHANGELOG.md from session logs')
+  .option('-s, --session <id>', 'Generate from specific session (default: most recent)')
+  .option('--commit', 'Show commit message')
+  .option('--pr', 'Show PR description')
+  .option('-v, --verbose', 'Verbose output')
+  .action(async (options) => {
+    const summaryCommand = require('./commands/summary');
+    await summaryCommand(options);
+  });
+
 // Doctor command - diagnose issues
 program
   .command('doctor')

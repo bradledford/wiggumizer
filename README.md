@@ -60,6 +60,18 @@ Automatically recognizes when code has reached the desired state. No more manual
 ### 🛡️ Safety Features
 Git integration, syntax validation, test execution, automatic backups. Safe by default.
 
+### 📝 Change Documentation
+Automatic CHANGELOG generation with commit messages, PR descriptions, and JIRA updates. Link changes to issues with YAML metadata.
+
+### 🧠 Self-Discovery Through Iteration
+Unlike other tools that "tell" the AI what was done, Wiggumizer implements the pure Ralph philosophy:
+- **Constant prompts** - The same goal every iteration, forcing deeper engagement
+- **Git archaeology** - Claude reads git log to discover what it did before
+- **Breadcrumb notes** - Claude can create `.ralph-notes.md` to leave insights for future iterations
+- **Autonomous learning** - Claude must examine files and context to understand its own progress
+
+This creates true iterative learning where each iteration builds meaningfully on the last.
+
 ## Philosophy
 
 Wiggumizer embraces **"deterministic imperfection"** - the idea that code quality emerges through iteration rather than upfront perfection.

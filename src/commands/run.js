@@ -4,6 +4,7 @@ const chalk = require('chalk');
 const ora = require('ora');
 const RalphLoop = require('../loop');
 const ConfigLoader = require('../config');
+const SummaryGenerator = require('../summary-generator');
 
 async function runCommand(cliOptions) {
   console.log(chalk.bold.blue('\n🎯 Wiggumizer v0.1.0'));
@@ -65,10 +66,47 @@ async function runCommand(cliOptions) {
   });
 
   try {
-    await loop.run();
+    const result = await loop.run();
+
+    // Generate CHANGELOG.md with summary
+    if (result && !config.dryRun) {
+      try {
+        const summary = SummaryGenerator.generateSummary({
+          promptContent: prompt,
+          sessionDir: result.sessionDir,
+          totalIterations: result.totalIterations,
+          filesModified: result.filesModified,
+          duration: result.duration,
+          converged: result.converged,
+          convergenceReason: result.convergenceReason,
+          convergenceSummary: result.convergenceSummary
+        });
+
+        // Display summary in console
+        SummaryGenerator.displaySummary(summary);
+
+        // Write CHANGELOG.md
+        const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
+        SummaryGenerator.writeChangelog(summary, changelogPath);
+
+        console.log(chalk.green('✓ Generated CHANGELOG.md'));
+        console.log(chalk.dim(`  ${changelogPath}`));
+        console.log();
+        console.log(chalk.dim('  Use this for:'));
+        console.log(chalk.dim('  - Commit messages'));
+        console.log(chalk.dim('  - Pull request descriptions'));
+        console.log(chalk.dim('  - JIRA updates'));
+        console.log();
+      } catch (summaryError) {
+        // Don't fail the whole run if summary generation fails
+        if (config.verbose) {
+          console.error(chalk.yellow('⚠ Failed to generate CHANGELOG:'), summaryError.message);
+        }
+      }
+    }
   } catch (error) {
     console.error(chalk.red('\n✗ Error:'), error.message);
-    if (options.verbose) {
+    if (cliOptions.verbose) {
       console.error(error.stack);
     }
     process.exit(1);

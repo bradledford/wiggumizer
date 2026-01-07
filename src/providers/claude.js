@@ -64,57 +64,115 @@ class ClaudeProvider {
         hasChanges,
         changes: content,
         summary: this.extractSummary(content),
+        reasoning: this.extractReasoning(content),
         raw: content
       };
     }, `Claude API call (iteration ${iteration})`);
   }
 
   buildSystemPrompt() {
-    return `You are an expert code refactoring assistant in a Ralph loop - an iterative code improvement system.
+    return `You are an autonomous code improvement agent in a Ralph loop - a self-directed iterative development system.
 
-Your role:
-- Read the user's prompt describing desired changes
-- Examine the current codebase
-- Make incremental improvements toward the goal
-- If the code already satisfies the prompt, respond with "NO CHANGES NEEDED"
+THE RALPH PHILOSOPHY:
+This is not a conversation. This is a loop. You will see the same prompt repeatedly until the work is complete.
+Each iteration, you must:
+1. Examine the codebase to understand what you've already done
+2. Identify what remains to achieve the goal
+3. Make substantial progress toward completion
+4. Leave evidence of your work for your future self
 
-Guidelines:
-- Make focused, incremental changes (don't try to do everything at once)
-- Preserve existing functionality unless explicitly asked to change it
-- Follow the existing code style and patterns
-- Be conservative - prefer small improvements that accumulate
+YOU ARE YOUR OWN TEACHER:
+- The prompt won't change. The codebase will.
+- You won't be told what you did before. You must discover it by reading files.
+- Previous failures are valuable data - learn from error messages, test failures, and broken code.
+- Your past self left clues: code structure, comments, TODOs, commit messages, test names.
 
-CRITICAL - Output format (you MUST follow this exactly):
-1. Start with a brief summary of what you're changing
-2. For each file you're modifying, use this EXACT format:
+SELF-DISCOVERY PROTOCOL (follow this every iteration):
+1. **INVESTIGATE**: Read the files carefully. What's the current state? What patterns exist?
+2. **RECALL**: What evidence suggests previous work? Look for:
+   - Partially implemented features
+   - TODO comments or FIXME markers
+   - Test files that hint at intended behavior
+   - Code structure that reveals architectural decisions
+3. **ANALYZE**: Compare current state against the goal. What's missing? What's broken?
+4. **DECIDE**: What is the MOST impactful change you can make right now?
+5. **IMPLEMENT**: Make substantial, meaningful changes (not cosmetic tweaks)
+6. **VALIDATE**: Would tests pass? Is the code better than before?
+
+DEPTH OVER BREADTH:
+- One well-implemented feature beats three half-done ones
+- Fix root causes, not symptoms
+- If you see a test failure pattern, fix the underlying issue
+- Complete what you start before moving to new areas
+
+SELF-BREADCRUMBS (leave clues for your next iteration):
+- Use meaningful test names that document intent
+- Add brief comments explaining "why" for non-obvious decisions
+- Structure code to reveal your thinking
+- If blocked, document the blocker clearly
+
+AUTONOMOUS VERIFICATION:
+- After changes, mentally trace execution paths
+- Consider edge cases and error scenarios
+- Think: "Would this pass code review? Would tests pass?"
+- If uncertain, prefer conservative approaches
+
+OUTPUT FORMAT (CRITICAL - follow exactly):
+
+## Reasoning:
+[Your deep analysis: What did you find? What needs to be done? Why this approach?]
+
+## Summary:
+[One line: what you're implementing/fixing]
 
 ## File: path/to/file.js
 \`\`\`javascript
 complete file contents here
 \`\`\`
 
-3. Include the COMPLETE file contents, not just the changes
-4. Use the correct language identifier in the code fence (javascript, python, etc.)
-5. If no changes are needed, respond with only "NO CHANGES NEEDED"
+RULES:
+- Include COMPLETE file contents (not diffs)
+- Use correct language identifier (javascript, python, etc.)
+- If goal is fully achieved, respond with only: "NO CHANGES NEEDED"
+- Make each iteration count - substantial progress, not trivial tweaks
 
-Example response:
-Improving error handling in authentication module.
-
-## File: src/auth.js
-\`\`\`javascript
-const bcrypt = require('bcrypt');
-
-async function authenticate(username, password) {
-  // Complete file contents...
-}
-
-module.exports = { authenticate };
-\`\`\``;
+REMEMBER: You are building on your own work. The codebase is your memory. Read it carefully.`;
   }
 
   buildUserMessage(prompt, context, iteration) {
-    let message = `# Iteration ${iteration}\n\n`;
-    message += `# User Prompt:\n${prompt}\n\n`;
+    // Build a clean, constant prompt structure (true Ralph style)
+    let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
+
+    // Add breadcrumbs if your past self left notes (UNIQUE FEATURE!)
+    if (context.breadcrumbs) {
+      message += `# Notes from Your Previous Self:\n`;
+      message += `Your past iterations left these breadcrumbs in .ralph-notes.md:\n\n`;
+      message += `${context.breadcrumbs}\n\n`;
+      message += `You can update .ralph-notes.md with new insights for your future self.\n\n`;
+    } else {
+      message += `# Breadcrumbs:\n`;
+      message += `You can create a file called .ralph-notes.md to leave notes for your future iterations.\n`;
+      message += `Use it to track progress, document blockers, or remind yourself of the plan.\n\n`;
+    }
+
+    // Add git context if available (KEY for self-discovery)
+    if (context.gitLog) {
+      message += `# Your Work History (git log):\n`;
+      message += `You can see what you've done in previous iterations:\n\n`;
+      message += `\`\`\`\n${context.gitLog}\n\`\`\`\n\n`;
+    }
+
+    if (context.gitStatus) {
+      message += `# Git Status:\n\`\`\`\n${context.gitStatus}\n\`\`\`\n\n`;
+    }
+
+    // Add test results if available (feedback loop for TDD)
+    if (context.testResults) {
+      message += `# Recent Test Results:\n`;
+      message += `Use this feedback to guide your next changes:\n\n`;
+      message += `\`\`\`\n${context.testResults}\n\`\`\`\n\n`;
+    }
+
     message += `# Current Codebase:\n\n`;
 
     // Add file contents
@@ -122,7 +180,10 @@ module.exports = { authenticate };
       message += `## File: ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
     }
 
-    message += `\nPlease make incremental improvements based on the prompt above.`;
+    // Simple, constant instructions (no variation by iteration)
+    message += `\n---\n\n`;
+    message += `Examine the codebase above. Make substantial progress toward the goal.\n`;
+    message += `Remember: You are building on your own prior work. The files show your progress.`;
 
     return message;
   }
@@ -140,9 +201,32 @@ module.exports = { authenticate };
   }
 
   extractSummary(content) {
-    // Extract first line or first paragraph as summary
-    const lines = content.split('\n');
-    return lines[0].substring(0, 100) + (lines[0].length > 100 ? '...' : '');
+    // Look for ## Summary: section
+    const summaryMatch = content.match(/##\s*Summary:\s*([^\n]+)/i);
+    if (summaryMatch) {
+      return summaryMatch[1].trim();
+    }
+
+    // Fallback: extract first line or first paragraph as summary
+    const lines = content.split('\n').filter(line => line.trim());
+    if (lines.length > 0) {
+      return lines[0].substring(0, 100) + (lines[0].length > 100 ? '...' : '');
+    }
+
+    return 'No summary available';
+  }
+
+  extractReasoning(content) {
+    // Look for ## Reasoning: section
+    const reasoningMatch = content.match(/##\s*Reasoning:\s*\n([\s\S]*?)(?=##|$)/i);
+    if (reasoningMatch) {
+      // Extract and clean up the reasoning text
+      const reasoning = reasoningMatch[1].trim();
+      // Take first 200 chars for storage
+      return reasoning.substring(0, 200) + (reasoning.length > 200 ? '...' : '');
+    }
+
+    return null;
   }
 }
 

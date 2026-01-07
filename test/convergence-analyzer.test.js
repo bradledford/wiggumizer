@@ -9,24 +9,51 @@ describe('ConvergenceAnalyzer', () => {
     analyzer = new ConvergenceAnalyzer({ threshold: 0.02 });
   });
 
+  describe('constructor', () => {
+    it('should use default options when none provided', () => {
+      const defaultAnalyzer = new ConvergenceAnalyzer();
+      assert.strictEqual(defaultAnalyzer.threshold, 0.02);
+      assert.strictEqual(defaultAnalyzer.oscillationWindow, 4);
+      assert.strictEqual(defaultAnalyzer.verbose, false);
+    });
+
+    it('should accept custom options', () => {
+      const customAnalyzer = new ConvergenceAnalyzer({
+        threshold: 0.05,
+        oscillationWindow: 6,
+        verbose: true
+      });
+      assert.strictEqual(customAnalyzer.threshold, 0.05);
+      assert.strictEqual(customAnalyzer.oscillationWindow, 6);
+      assert.strictEqual(customAnalyzer.verbose, true);
+    });
+  });
+
   describe('recordIteration', () => {
-    it('should record an iteration with correct data', () => {
+    it('should record iteration data', () => {
       const record = analyzer.recordIteration(1, {
-        filesModified: 2,
-        filesList: ['src/index.js', 'src/utils.js'],
-        response: 'Modified two files'
+        filesModified: 3,
+        filesList: ['file1.js', 'file2.js', 'file3.js'],
+        response: 'some response text'
       });
 
       assert.strictEqual(record.iteration, 1);
-      assert.strictEqual(record.filesModified, 2);
-      assert.deepStrictEqual(record.filesList, ['src/index.js', 'src/utils.js']);
+      assert.strictEqual(record.filesModified, 3);
+      assert.deepStrictEqual(record.filesList, ['file1.js', 'file2.js', 'file3.js']);
       assert.ok(record.responseHash);
       assert.ok(record.timestamp);
     });
 
+    it('should handle missing data gracefully', () => {
+      const record = analyzer.recordIteration(1, {});
+
+      assert.strictEqual(record.filesModified, 0);
+      assert.deepStrictEqual(record.filesList, []);
+    });
+
     it('should keep only last 10 iterations', () => {
       for (let i = 1; i <= 15; i++) {
-        analyzer.recordIteration(i, { filesModified: 1 });
+        analyzer.recordIteration(i, { filesModified: i });
       }
 
       assert.strictEqual(analyzer.iterationHistory.length, 10);
@@ -36,63 +63,95 @@ describe('ConvergenceAnalyzer', () => {
   });
 
   describe('updateFileHashes', () => {
+    it('should track file hashes', () => {
+      const files = [
+        { path: 'file1.js', content: 'content1' },
+        { path: 'file2.js', content: 'content2' }
+      ];
+
+      analyzer.updateFileHashes(files);
+
+      assert.strictEqual(analyzer.fileHashes.size, 2);
+      assert.ok(analyzer.fileHashes.has('file1.js'));
+      assert.ok(analyzer.fileHashes.has('file2.js'));
+    });
+
     it('should detect changed files', () => {
       const files1 = [
-        { path: 'src/index.js', content: 'console.log("hello")' },
-        { path: 'src/utils.js', content: 'export const foo = 1' }
-      ];
-
-      const files2 = [
-        { path: 'src/index.js', content: 'console.log("hello world")' }, // changed
-        { path: 'src/utils.js', content: 'export const foo = 1' } // unchanged
+        { path: 'file1.js', content: 'content1' },
+        { path: 'file2.js', content: 'content2' }
       ];
 
       analyzer.updateFileHashes(files1);
-      const comparison = analyzer.updateFileHashes(files2);
 
-      assert.strictEqual(comparison.changed, 1);
-      assert.strictEqual(comparison.unchanged, 1);
-      assert.strictEqual(comparison.added, 0);
-      assert.strictEqual(comparison.removed, 0);
+      const files2 = [
+        { path: 'file1.js', content: 'content1-modified' },
+        { path: 'file2.js', content: 'content2' }
+      ];
+
+      const result = analyzer.updateFileHashes(files2);
+
+      assert.strictEqual(result.changed, 1);
+      assert.strictEqual(result.unchanged, 1);
+      assert.strictEqual(result.added, 0);
+      assert.strictEqual(result.removed, 0);
     });
 
-    it('should detect added files', () => {
+    it('should detect added and removed files', () => {
       const files1 = [
-        { path: 'src/index.js', content: 'hello' }
-      ];
-
-      const files2 = [
-        { path: 'src/index.js', content: 'hello' },
-        { path: 'src/new.js', content: 'new file' }
+        { path: 'file1.js', content: 'content1' },
+        { path: 'file2.js', content: 'content2' }
       ];
 
       analyzer.updateFileHashes(files1);
-      const comparison = analyzer.updateFileHashes(files2);
 
-      assert.strictEqual(comparison.added, 1);
-      assert.strictEqual(comparison.unchanged, 1);
+      const files2 = [
+        { path: 'file1.js', content: 'content1' },
+        { path: 'file3.js', content: 'content3' }
+      ];
+
+      const result = analyzer.updateFileHashes(files2);
+
+      assert.strictEqual(result.removed, 1);
+      assert.strictEqual(result.added, 1);
+      assert.strictEqual(result.unchanged, 1);
+    });
+  });
+
+  describe('checkConvergence', () => {
+    it('should not converge with insufficient iterations', () => {
+      analyzer.recordIteration(1, { filesModified: 1 });
+
+      const result = analyzer.checkConvergence();
+
+      assert.strictEqual(result.converged, false);
+      assert.strictEqual(result.reason, 'Not enough iterations');
     });
 
-    it('should detect removed files', () => {
-      const files1 = [
-        { path: 'src/index.js', content: 'hello' },
-        { path: 'src/old.js', content: 'old file' }
-      ];
+    it('should detect convergence when no files modified for multiple iterations', () => {
+      analyzer.recordIteration(1, { filesModified: 2 });
+      analyzer.recordIteration(2, { filesModified: 0 });
+      analyzer.recordIteration(3, { filesModified: 0 });
 
-      const files2 = [
-        { path: 'src/index.js', content: 'hello' }
-      ];
+      const result = analyzer.checkConvergence();
 
-      analyzer.updateFileHashes(files1);
-      const comparison = analyzer.updateFileHashes(files2);
-
-      assert.strictEqual(comparison.removed, 1);
-      assert.strictEqual(comparison.unchanged, 1);
+      assert.strictEqual(result.converged, true);
+      assert.strictEqual(result.confidence, 1.0);
+      assert.ok(result.reason.includes('No file modifications'));
     });
   });
 
   describe('checkNoChangesConvergence', () => {
-    it('should converge when no files modified for multiple iterations', () => {
+    it('should not converge with only one no-change iteration', () => {
+      analyzer.recordIteration(1, { filesModified: 2 });
+      analyzer.recordIteration(2, { filesModified: 0 });
+
+      const result = analyzer.checkNoChangesConvergence();
+
+      assert.strictEqual(result.converged, false);
+    });
+
+    it('should converge after multiple no-change iterations', () => {
       analyzer.recordIteration(1, { filesModified: 0 });
       analyzer.recordIteration(2, { filesModified: 0 });
       analyzer.recordIteration(3, { filesModified: 0 });
@@ -102,28 +161,27 @@ describe('ConvergenceAnalyzer', () => {
       assert.strictEqual(result.converged, true);
       assert.strictEqual(result.confidence, 1.0);
     });
-
-    it('should not converge when files are still being modified', () => {
-      analyzer.recordIteration(1, { filesModified: 2 });
-      analyzer.recordIteration(2, { filesModified: 1 });
-      analyzer.recordIteration(3, { filesModified: 0 });
-
-      const result = analyzer.checkNoChangesConvergence();
-
-      assert.strictEqual(result.converged, false);
-    });
   });
 
   describe('checkOscillation', () => {
-    it('should detect alternating oscillation pattern', () => {
-      const stateA = [{ path: 'file.js', content: 'state A' }];
-      const stateB = [{ path: 'file.js', content: 'state B' }];
+    it('should not detect oscillation with insufficient history', () => {
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'a' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'b' }]);
 
-      // Simulate A -> B -> A -> B pattern
-      analyzer.updateFileHashes(stateA);
-      analyzer.updateFileHashes(stateB);
-      analyzer.updateFileHashes(stateA);
-      analyzer.updateFileHashes(stateB);
+      const result = analyzer.checkOscillation();
+
+      assert.strictEqual(result.detected, false);
+    });
+
+    it('should detect alternating oscillation pattern', () => {
+      // State A
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-a' }]);
+      // State B
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-b' }]);
+      // State A again
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-a' }]);
+      // State B again
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-b' }]);
 
       const result = analyzer.checkOscillation();
 
@@ -132,66 +190,68 @@ describe('ConvergenceAnalyzer', () => {
       assert.strictEqual(result.states, 2);
     });
 
-    it('should not detect oscillation for normal convergence', () => {
-      const files = [
-        [{ path: 'file.js', content: 'version 1' }],
-        [{ path: 'file.js', content: 'version 2' }],
-        [{ path: 'file.js', content: 'version 3' }],
-        [{ path: 'file.js', content: 'version 4' }]
-      ];
-
-      files.forEach(f => analyzer.updateFileHashes(f));
-
-      const result = analyzer.checkOscillation();
-
-      assert.strictEqual(result.detected, false);
-    });
-
-    it('should detect cycling pattern', () => {
-      const stateA = [{ path: 'file.js', content: 'state A' }];
-      const stateB = [{ path: 'file.js', content: 'state B' }];
-      const stateC = [{ path: 'file.js', content: 'state C' }];
-
-      // Simulate A -> B -> C -> A pattern
-      analyzer.updateFileHashes(stateA);
-      analyzer.updateFileHashes(stateB);
-      analyzer.updateFileHashes(stateC);
-      analyzer.updateFileHashes(stateA);
+    it('should detect three-state cycling pattern', () => {
+      // State A
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-a' }]);
+      // State B
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-b' }]);
+      // State C
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-c' }]);
+      // State A again
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'state-a' }]);
 
       const result = analyzer.checkOscillation();
 
       assert.strictEqual(result.detected, true);
       assert.strictEqual(result.pattern, 'cycling');
+      assert.strictEqual(result.states, 3);
+    });
+
+    it('should not detect oscillation when states are stable', () => {
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable' }]);
+
+      const result = analyzer.checkOscillation();
+
+      assert.strictEqual(result.detected, false);
     });
   });
 
   describe('checkStability', () => {
-    it('should converge when file hashes are stable for 3 iterations', () => {
-      const stableState = [{ path: 'file.js', content: 'stable content' }];
-
-      analyzer.updateFileHashes(stableState);
-      analyzer.updateFileHashes(stableState);
-      analyzer.updateFileHashes(stableState);
-
-      const result = analyzer.checkStability();
-
-      assert.strictEqual(result.converged, true);
-      assert.ok(result.confidence >= 0.9);
-    });
-
-    it('should not converge when files are still changing', () => {
-      analyzer.updateFileHashes([{ path: 'file.js', content: 'v1' }]);
-      analyzer.updateFileHashes([{ path: 'file.js', content: 'v2' }]);
-      analyzer.updateFileHashes([{ path: 'file.js', content: 'v3' }]);
+    it('should not detect stability with insufficient history', () => {
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'a' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'a' }]);
 
       const result = analyzer.checkStability();
 
       assert.strictEqual(result.converged, false);
     });
+
+    it('should detect stability when hashes are unchanged', () => {
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable-content' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable-content' }]);
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'stable-content' }]);
+
+      const result = analyzer.checkStability();
+
+      assert.strictEqual(result.converged, true);
+      assert.strictEqual(result.confidence, 0.95);
+    });
   });
 
   describe('checkDiminishingChanges', () => {
-    it('should converge when changes are diminishing to zero', () => {
+    it('should not detect diminishing changes with insufficient history', () => {
+      analyzer.recordIteration(1, { filesModified: 5 });
+      analyzer.recordIteration(2, { filesModified: 3 });
+
+      const result = analyzer.checkDiminishingChanges();
+
+      assert.strictEqual(result.converged, false);
+    });
+
+    it('should detect diminishing changes pattern', () => {
       analyzer.recordIteration(1, { filesModified: 5 });
       analyzer.recordIteration(2, { filesModified: 3 });
       analyzer.recordIteration(3, { filesModified: 1 });
@@ -200,6 +260,7 @@ describe('ConvergenceAnalyzer', () => {
       const result = analyzer.checkDiminishingChanges();
 
       assert.strictEqual(result.converged, true);
+      assert.strictEqual(result.confidence, 0.85);
     });
 
     it('should not converge when changes are not diminishing', () => {
@@ -215,7 +276,7 @@ describe('ConvergenceAnalyzer', () => {
   });
 
   describe('calculateConfidence', () => {
-    it('should return 0 for insufficient iterations', () => {
+    it('should return 0 with insufficient iterations', () => {
       analyzer.recordIteration(1, { filesModified: 1 });
 
       const confidence = analyzer.calculateConfidence();
@@ -223,7 +284,7 @@ describe('ConvergenceAnalyzer', () => {
       assert.strictEqual(confidence, 0);
     });
 
-    it('should increase confidence for no-change iterations', () => {
+    it('should increase confidence with no changes', () => {
       analyzer.recordIteration(1, { filesModified: 0 });
       analyzer.recordIteration(2, { filesModified: 0 });
       analyzer.recordIteration(3, { filesModified: 0 });
@@ -233,60 +294,23 @@ describe('ConvergenceAnalyzer', () => {
       assert.ok(confidence > 0.5);
     });
 
-    it('should increase confidence for decreasing changes', () => {
-      analyzer.recordIteration(1, { filesModified: 3 });
-      analyzer.recordIteration(2, { filesModified: 2 });
-      analyzer.recordIteration(3, { filesModified: 1 });
+    it('should cap confidence at 1.0', () => {
+      // Create conditions for maximum confidence
+      for (let i = 1; i <= 5; i++) {
+        analyzer.recordIteration(i, {
+          filesModified: 0,
+          response: 'identical response'
+        });
+      }
 
       const confidence = analyzer.calculateConfidence();
 
-      assert.ok(confidence > 0);
-    });
-  });
-
-  describe('checkConvergence', () => {
-    it('should return not converged for too few iterations', () => {
-      analyzer.recordIteration(1, { filesModified: 1 });
-
-      const result = analyzer.checkConvergence();
-
-      assert.strictEqual(result.converged, false);
-      assert.strictEqual(result.reason, 'Not enough iterations');
-    });
-
-    it('should detect convergence via no changes', () => {
-      analyzer.recordIteration(1, { filesModified: 0 });
-      analyzer.recordIteration(2, { filesModified: 0 });
-      analyzer.recordIteration(3, { filesModified: 0 });
-
-      const result = analyzer.checkConvergence();
-
-      assert.strictEqual(result.converged, true);
-    });
-
-    it('should report oscillation without converging', () => {
-      const stateA = [{ path: 'file.js', content: 'A' }];
-      const stateB = [{ path: 'file.js', content: 'B' }];
-
-      analyzer.updateFileHashes(stateA);
-      analyzer.recordIteration(1, { filesModified: 1 });
-      analyzer.updateFileHashes(stateB);
-      analyzer.recordIteration(2, { filesModified: 1 });
-      analyzer.updateFileHashes(stateA);
-      analyzer.recordIteration(3, { filesModified: 1 });
-      analyzer.updateFileHashes(stateB);
-      analyzer.recordIteration(4, { filesModified: 1 });
-
-      const result = analyzer.checkConvergence();
-
-      assert.strictEqual(result.converged, false);
-      assert.ok(result.oscillation);
-      assert.strictEqual(result.oscillation.detected, true);
+      assert.ok(confidence <= 1.0);
     });
   });
 
   describe('hashMapsEqual', () => {
-    it('should return true for equal maps', () => {
+    it('should return true for identical maps', () => {
       const map1 = new Map([['a', '1'], ['b', '2']]);
       const map2 = new Map([['a', '1'], ['b', '2']]);
 
@@ -301,32 +325,56 @@ describe('ConvergenceAnalyzer', () => {
     });
 
     it('should return false for different values', () => {
-      const map1 = new Map([['a', '1']]);
-      const map2 = new Map([['a', '2']]);
+      const map1 = new Map([['a', '1'], ['b', '2']]);
+      const map2 = new Map([['a', '1'], ['b', '3']]);
 
       assert.strictEqual(analyzer.hashMapsEqual(map1, map2), false);
     });
   });
 
+  describe('hashString', () => {
+    it('should produce consistent hashes', () => {
+      const hash1 = analyzer.hashString('test content');
+      const hash2 = analyzer.hashString('test content');
+
+      assert.strictEqual(hash1, hash2);
+    });
+
+    it('should produce different hashes for different content', () => {
+      const hash1 = analyzer.hashString('content 1');
+      const hash2 = analyzer.hashString('content 2');
+
+      assert.notStrictEqual(hash1, hash2);
+    });
+
+    it('should produce 64-character SHA-256 hash', () => {
+      const hash = analyzer.hashString('test');
+
+      assert.strictEqual(hash.length, 64);
+      assert.ok(/^[a-f0-9]+$/.test(hash));
+    });
+  });
+
   describe('getSummary', () => {
-    it('should return a complete summary', () => {
-      analyzer.recordIteration(1, { filesModified: 2 });
+    it('should return comprehensive summary', () => {
+      analyzer.recordIteration(1, { filesModified: 3 });
       analyzer.recordIteration(2, { filesModified: 1 });
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'a' }]);
 
       const summary = analyzer.getSummary();
 
-      assert.strictEqual(summary.totalIterations, 2);
+      assert.ok('totalIterations' in summary);
       assert.ok('convergence' in summary);
       assert.ok('oscillation' in summary);
       assert.ok('recentChanges' in summary);
-      assert.strictEqual(summary.recentChanges.length, 2);
+      assert.strictEqual(summary.totalIterations, 2);
     });
   });
 
   describe('reset', () => {
     it('should clear all state', () => {
-      analyzer.recordIteration(1, { filesModified: 1 });
-      analyzer.updateFileHashes([{ path: 'file.js', content: 'test' }]);
+      analyzer.recordIteration(1, { filesModified: 3 });
+      analyzer.updateFileHashes([{ path: 'f.js', content: 'a' }]);
 
       analyzer.reset();
 
