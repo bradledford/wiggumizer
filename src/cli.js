@@ -34,14 +34,17 @@ program
   .command('init')
   .description('Initialize Wiggumizer configuration')
   .option('--force', 'Overwrite existing .wiggumizer.yml')
+  .option('--template <name>', 'Prompt template to use (refactor, bugfix, feature, testing, docs)')
   .action(async (options) => {
     const ConfigLoader = require('./config');
+    const { listTemplates, getTemplate } = require('./prompt-templates');
     const fs = require('fs');
     const path = require('path');
 
     console.log(chalk.blue('🎯 Initializing Wiggumizer\n'));
 
     const configPath = path.join(process.cwd(), '.wiggumizer.yml');
+    const promptPath = path.join(process.cwd(), 'PROMPT.md');
 
     // Check if config already exists
     if (fs.existsSync(configPath) && !options.force) {
@@ -51,23 +54,41 @@ program
     }
 
     try {
+      // Create config
       if (options.force && fs.existsSync(configPath)) {
-        // Overwrite
         fs.writeFileSync(configPath, ConfigLoader.generateDefaultConfig(), 'utf-8');
         console.log(chalk.green('✓ Overwrote .wiggumizer.yml'));
       } else {
         ConfigLoader.createProjectConfig();
         console.log(chalk.green('✓ Created .wiggumizer.yml'));
       }
+      console.log(chalk.dim(`  ${configPath}`));
 
-      console.log(chalk.dim(`  ${configPath}\n`));
+      // Create PROMPT.md from template
+      if (!fs.existsSync(promptPath) || options.force) {
+        const templateName = options.template || 'blank';
+        const template = getTemplate(templateName);
+        fs.writeFileSync(promptPath, template.content, 'utf-8');
+        console.log(chalk.green(`✓ Created PROMPT.md from '${template.name}' template`));
+        console.log(chalk.dim(`  ${promptPath}`));
+      } else {
+        console.log(chalk.yellow('⚠ PROMPT.md already exists (skipped)'));
+        console.log(chalk.dim('  Use --force to overwrite'));
+      }
+
+      console.log();
+      console.log(chalk.blue('Available templates:'));
+      listTemplates().forEach(t => {
+        console.log(chalk.dim(`  ${t.id.padEnd(12)} - ${t.description}`));
+      });
+
+      console.log();
       console.log(chalk.blue('Next steps:'));
-      console.log(chalk.dim('  1. Edit .wiggumizer.yml to customize settings'));
-      console.log(chalk.dim('  2. Set your API key: export ANTHROPIC_API_KEY=...'));
-      console.log(chalk.dim('  3. Create PROMPT.md with your instructions'));
-      console.log(chalk.dim('  4. Run: wiggumize run\n'));
+      console.log(chalk.dim('  1. Edit PROMPT.md with your specific instructions'));
+      console.log(chalk.dim('  2. Set your API key: export ANTHROPIC_API_KEY=your-key'));
+      console.log(chalk.dim('  3. Run: wiggumize run\n'));
     } catch (error) {
-      console.error(chalk.red('✗ Failed to create config:'), error.message);
+      console.error(chalk.red('✗ Failed to initialize:'), error.message);
       process.exit(1);
     }
   });

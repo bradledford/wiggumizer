@@ -17,10 +17,23 @@ async function runCommand(cliOptions) {
 
   if (!fs.existsSync(promptPath)) {
     console.error(chalk.red(`✗ Prompt file not found: ${config.prompt || 'PROMPT.md'}`));
-    console.log(chalk.yellow('\nCreate a PROMPT.md file with your instructions, then try again.'));
+    console.log(chalk.yellow('\nThe PROMPT.md file tells Wiggumizer what to do.'));
+    console.log(chalk.dim('\nQuick start:'));
+    console.log(chalk.dim('  1. Create PROMPT.md:'));
+    console.log(chalk.dim('     echo "# Improve my code\\nModernize to async/await and improve naming" > PROMPT.md'));
+    console.log(chalk.dim('  2. Run: wiggumize run'));
+    console.log(chalk.dim('\nOr use init to create from template:'));
+    console.log(chalk.dim('  wiggumize init'));
     console.log(chalk.dim('\nExample PROMPT.md:'));
-    console.log(chalk.dim('  # Refactor Authentication\n'));
-    console.log(chalk.dim('  Modernize the auth module to use async/await...\n'));
+    console.log(chalk.dim('─'.repeat(50)));
+    console.log(chalk.cyan('# Refactor Authentication Module\n'));
+    console.log(chalk.dim('Modernize the authentication code:\n'));
+    console.log(chalk.dim('- Convert callbacks to async/await'));
+    console.log(chalk.dim('- Add proper error handling'));
+    console.log(chalk.dim('- Improve variable naming\n'));
+    console.log(chalk.dim('Preserve existing functionality.'));
+    console.log(chalk.dim('─'.repeat(50)));
+    console.log();
     process.exit(1);
   }
 
