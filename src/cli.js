@@ -12,7 +12,7 @@ const program = new Command();
 program
   .name('wiggumize')
   .description('Ralph Wiggum style AI coding automation')
-  .version('0.1.0');
+  .version('0.3.1');
 
 // Run command - the core of Wiggumizer
 program
@@ -22,8 +22,13 @@ program
   .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER || 'claude')
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
+  .option('-q, --quiet', 'Minimal output (only errors and final result)')
   .option('--dry-run', 'Show what would change without modifying files')
   .option('--auto-commit', 'Automatically commit changes after each iteration')
+  .option('--watch', 'Watch PROMPT.md for changes and auto-restart loop')
+  .option('--files <patterns>', 'Glob patterns for files to include (comma-separated)')
+  .option('--convergence-threshold <num>', 'Convergence threshold (0.0 to 1.0)', '0.02')
+  .option('--continue', 'Continue from previous session if available')
   .action(async (options) => {
     const runCommand = require('./commands/run');
     await runCommand(options);
@@ -97,8 +102,48 @@ program
 program
   .command('template')
   .description('Manage prompt templates')
-  .action(() => {
-    console.log(chalk.yellow('Template management coming soon!'));
+  .argument('[action]', 'Action: list, show')
+  .argument('[name]', 'Template name (for show action)')
+  .action((action, name) => {
+    const { listTemplates, getTemplate, templates } = require('./prompt-templates');
+
+    if (!action || action === 'list') {
+      console.log(chalk.bold('\nAvailable Prompt Templates\n'));
+      listTemplates().forEach(t => {
+        console.log(chalk.blue(`  ${t.id.padEnd(14)}`), chalk.dim(t.description));
+      });
+      console.log();
+      console.log(chalk.dim('Use a template: wiggumize init --template <name>'));
+      console.log(chalk.dim('View template:  wiggumize template show <name>\n'));
+      return;
+    }
+
+    if (action === 'show') {
+      if (!name) {
+        console.log(chalk.red('✗ Template name required'));
+        console.log(chalk.dim('Usage: wiggumize template show <name>\n'));
+        process.exit(1);
+      }
+
+      if (!templates[name]) {
+        console.log(chalk.red(`✗ Template not found: ${name}`));
+        console.log(chalk.dim('\nAvailable templates:'));
+        listTemplates().forEach(t => console.log(chalk.dim(`  ${t.id}`)));
+        console.log();
+        process.exit(1);
+      }
+
+      const template = getTemplate(name);
+      console.log(chalk.bold(`\nTemplate: ${template.name}\n`));
+      console.log(chalk.dim('─'.repeat(60)));
+      console.log(template.content);
+      console.log(chalk.dim('─'.repeat(60)));
+      console.log();
+      return;
+    }
+
+    console.log(chalk.yellow(`Unknown action: ${action}`));
+    console.log(chalk.dim('Available actions: list, show\n'));
   });
 
 // Logs command - view iteration logs
@@ -130,11 +175,19 @@ program
   .command('doctor')
   .description('Diagnose installation and configuration issues')
   .action(() => {
+    const fs = require('fs');
+    const path = require('path');
+
     console.log(chalk.blue('🏥 Wiggumizer Doctor\n'));
 
     // Check Node version
     const nodeVersion = process.version;
-    console.log(chalk.green('✓') + ` Node.js: ${nodeVersion}`);
+    const nodeVersionNum = parseFloat(nodeVersion.slice(1));
+    if (nodeVersionNum >= 18) {
+      console.log(chalk.green('✓') + ` Node.js: ${nodeVersion}`);
+    } else {
+      console.log(chalk.red('✗') + ` Node.js: ${nodeVersion} (requires >= 18.0.0)`);
+    }
 
     // Check for API keys
     const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
@@ -152,7 +205,41 @@ program
       console.log(chalk.yellow('⚠') + ' OpenAI API key not found (optional)');
     }
 
-    console.log(chalk.dim('\nWiggumizer is ready to go!\n'));
+    // Check for config file
+    const configPath = path.join(process.cwd(), '.wiggumizer.yml');
+    if (fs.existsSync(configPath)) {
+      console.log(chalk.green('✓') + ' .wiggumizer.yml found');
+    } else {
+      console.log(chalk.yellow('⚠') + ' .wiggumizer.yml not found (run: wiggumize init)');
+    }
+
+    // Check for PROMPT.md
+    const promptPath = path.join(process.cwd(), 'PROMPT.md');
+    if (fs.existsSync(promptPath)) {
+      console.log(chalk.green('✓') + ' PROMPT.md found');
+    } else {
+      console.log(chalk.yellow('⚠') + ' PROMPT.md not found (required for running)');
+    }
+
+    // Check git
+    const GitHelper = require('./git-helper');
+    if (GitHelper.isGitRepo()) {
+      console.log(chalk.green('✓') + ' Git repository detected');
+      if (GitHelper.hasUncommittedChanges()) {
+        console.log(chalk.yellow('⚠') + ' Uncommitted changes detected');
+      }
+    } else {
+      console.log(chalk.yellow('⚠') + ' Not a git repository (recommended for safety)');
+    }
+
+    console.log();
+
+    // Summary
+    if (hasAnthropicKey && nodeVersionNum >= 18) {
+      console.log(chalk.green('✓ Wiggumizer is ready to go!\n'));
+    } else {
+      console.log(chalk.yellow('⚠ Some issues need attention before running.\n'));
+    }
   });
 
 program.parse(process.argv);
