@@ -186,6 +186,134 @@ class WorkspaceManager {
   }
 
   /**
+   * Get codebase context (files and metadata) for all workspaces
+   * This is used to build the context sent to the AI provider
+   */
+  getCodebaseContext() {
+    const isMultiRepo = this.isMultiRepo();
+
+    if (isMultiRepo) {
+      // Multi-repo mode: gather files from all workspaces
+      const files = this.getAllFiles();
+      const workspaces = this.workspaces.map(w => ({
+        name: w.name || w.path,
+        path: this.resolvePath(w.path)
+      }));
+
+      return {
+        isMultiRepo: true,
+        files,
+        workspaces,
+        cwd: this.baseDir
+      };
+    } else {
+      // Single repo mode: use FileSelector directly
+      const FileSelector = require('./file-selector');
+      const cwd = process.cwd();
+
+      const selector = new FileSelector({
+        cwd,
+        respectGitignore: true,
+        verbose: this.verbose
+      });
+
+      const files = selector.getFilesWithContent();
+
+      return {
+        isMultiRepo: false,
+        files,
+        cwd
+      };
+    }
+  }
+
+  /**
+   * Apply changes from AI response
+   * Parses the changes text and applies them to the appropriate workspace(s)
+   *
+   * @param {string} changesText - The raw text from AI containing file changes
+   * @param {function} applyCallback - Function(workspace, changes) to apply changes to a workspace
+   * @returns {object} - { count: number, files: string[] }
+   */
+  applyChanges(changesText, applyCallback) {
+    // Parse changes to extract file modifications
+    // Pattern: ## File: [workspace-name] path/to/file.js OR ## File: path/to/file.js
+    const filePattern = /##\s*File:\s*(?:\[([^\]]+)\]\s*)?([^\n]+)\n```[^\n]*\n([\s\S]*?)```/g;
+
+    const isMultiRepo = this.isMultiRepo();
+    const changesByWorkspace = new Map();
+    let match;
+
+    // Group changes by workspace
+    while ((match = filePattern.exec(changesText)) !== null) {
+      const workspaceName = match[1]?.trim();
+      const filePath = match[2].trim();
+      const fileContent = match[3];
+
+      let targetWorkspace;
+
+      if (isMultiRepo) {
+        // In multi-repo mode, find the workspace by name
+        if (!workspaceName) {
+          console.warn(chalk.yellow(`Warning: File ${filePath} has no workspace prefix in multi-repo mode, skipping`));
+          continue;
+        }
+
+        targetWorkspace = this.workspaces.find(w =>
+          (w.name || w.path) === workspaceName
+        );
+
+        if (!targetWorkspace) {
+          console.warn(chalk.yellow(`Warning: Unknown workspace ${workspaceName}, skipping ${filePath}`));
+          continue;
+        }
+      } else {
+        // In single-repo mode, use current directory
+        targetWorkspace = {
+          name: 'default',
+          path: process.cwd()
+        };
+      }
+
+      const workspaceKey = targetWorkspace.name || targetWorkspace.path;
+
+      if (!changesByWorkspace.has(workspaceKey)) {
+        changesByWorkspace.set(workspaceKey, {
+          workspace: targetWorkspace,
+          changes: []
+        });
+      }
+
+      const workspacePath = this.resolvePath(targetWorkspace.path);
+      const fullPath = path.join(workspacePath, filePath);
+
+      changesByWorkspace.get(workspaceKey).changes.push({
+        filePath,
+        fileContent,
+        fullPath
+      });
+    }
+
+    // Apply changes to each workspace
+    let totalFilesModified = 0;
+    const allModifiedFiles = [];
+
+    for (const { workspace, changes } of changesByWorkspace.values()) {
+      const result = applyCallback(workspace, changes);
+
+      if (result && result.count) {
+        totalFilesModified += result.count;
+        allModifiedFiles.push(...result.files);
+      }
+    }
+
+    return {
+      count: totalFilesModified,
+      files: allModifiedFiles
+    };
+  }
+
+  /**
    * Write a file to a specific workspace
    */
   writeFile(workspaceName, filePath, content) {

@@ -514,4 +514,191 @@ describe('WorkspaceManager', () => {
       assert.strictEqual(results[0].valid, true);
     });
   });
+
+  describe('getWorkspaces', () => {
+    it('should return all workspaces', () => {
+      const workspaces = [
+        { path: '/path1', name: 'Workspace1' },
+        { path: '/path2', name: 'Workspace2' }
+      ];
+      const manager = new WorkspaceManager({ workspaces });
+
+      const result = manager.getWorkspaces();
+
+      assert.deepStrictEqual(result, workspaces);
+    });
+
+    it('should return empty array if no workspaces', () => {
+      const manager = new WorkspaceManager();
+
+      const result = manager.getWorkspaces();
+
+      assert.deepStrictEqual(result, []);
+    });
+  });
+
+  describe('isMultiRepo', () => {
+    it('should return true if workspaces exist', () => {
+      const manager = new WorkspaceManager({
+        workspaces: [{ path: '/path1' }]
+      });
+
+      assert.strictEqual(manager.isMultiRepo(), true);
+    });
+
+    it('should return false if no workspaces', () => {
+      const manager = new WorkspaceManager();
+
+      assert.strictEqual(manager.isMultiRepo(), false);
+    });
+
+    it('should return false if workspaces array is empty', () => {
+      const manager = new WorkspaceManager({ workspaces: [] });
+
+      assert.strictEqual(manager.isMultiRepo(), false);
+    });
+  });
+
+  describe('getCodebaseContext', () => {
+    it('should return single-repo context when no workspaces', () => {
+      const manager = new WorkspaceManager();
+
+      const context = manager.getCodebaseContext();
+
+      assert.strictEqual(context.isMultiRepo, false);
+      assert.ok(Array.isArray(context.files));
+      assert.ok(context.cwd);
+    });
+
+    it('should return multi-repo context when workspaces exist', () => {
+      const workspace1 = path.join(tempDir, 'ws1');
+      const workspace2 = path.join(tempDir, 'ws2');
+
+      fs.mkdirSync(workspace1);
+      fs.mkdirSync(workspace2);
+
+      // Create test files
+      fs.writeFileSync(path.join(workspace1, 'test1.js'), 'console.log("test1");');
+      fs.writeFileSync(path.join(workspace2, 'test2.js'), 'console.log("test2");');
+
+      const manager = new WorkspaceManager({
+        baseDir: tempDir,
+        workspaces: [
+          { path: 'ws1', name: 'Workspace1' },
+          { path: 'ws2', name: 'Workspace2' }
+        ]
+      });
+
+      const context = manager.getCodebaseContext();
+
+      assert.strictEqual(context.isMultiRepo, true);
+      assert.ok(Array.isArray(context.files));
+      assert.ok(Array.isArray(context.workspaces));
+      assert.strictEqual(context.workspaces.length, 2);
+    });
+  });
+
+  describe('applyChanges', () => {
+    it('should parse and apply changes for single repo', () => {
+      const manager = new WorkspaceManager();
+      const changesText = `## File: test.js
+\`\`\`javascript
+console.log("hello");
+\`\`\``;
+
+      let callbackCalled = false;
+      const callback = (_workspace, changes) => {
+        callbackCalled = true;
+        assert.strictEqual(changes.length, 1);
+        assert.strictEqual(changes[0].filePath, 'test.js');
+        assert.strictEqual(changes[0].fileContent, 'console.log("hello");\n');
+        return { count: 1, files: ['test.js'] };
+      };
+
+      const result = manager.applyChanges(changesText, callback);
+
+      assert.strictEqual(callbackCalled, true);
+      assert.strictEqual(result.count, 1);
+      assert.deepStrictEqual(result.files, ['test.js']);
+    });
+
+    it('should parse and apply changes for multi-repo with workspace prefix', () => {
+      const manager = new WorkspaceManager({
+        workspaces: [
+          { path: '/path1', name: 'Workspace1' },
+          { path: '/path2', name: 'Workspace2' }
+        ]
+      });
+
+      const changesText = `## File: [Workspace1] test1.js
+\`\`\`javascript
+console.log("ws1");
+\`\`\`
+
+## File: [Workspace2] test2.js
+\`\`\`javascript
+console.log("ws2");
+\`\`\``;
+
+      const callbackResults = [];
+      const callback = (workspace, changes) => {
+        callbackResults.push({ workspace, changes });
+        return { count: changes.length, files: changes.map(c => c.filePath) };
+      };
+
+      const result = manager.applyChanges(changesText, callback);
+
+      assert.strictEqual(callbackResults.length, 2);
+      assert.strictEqual(result.count, 2);
+      assert.strictEqual(result.files.length, 2);
+    });
+
+    it('should skip files without workspace prefix in multi-repo mode', () => {
+      const manager = new WorkspaceManager({
+        workspaces: [{ path: '/path1', name: 'Workspace1' }]
+      });
+
+      const changesText = `## File: test.js
+\`\`\`javascript
+console.log("no prefix");
+\`\`\``;
+
+      const callback = () => {
+        assert.fail('Callback should not be called for invalid files');
+      };
+
+      const result = manager.applyChanges(changesText, callback);
+
+      assert.strictEqual(result.count, 0);
+      assert.strictEqual(result.files.length, 0);
+    });
+
+    it('should handle multiple files in same workspace', () => {
+      const manager = new WorkspaceManager({
+        workspaces: [{ path: '/path1', name: 'Workspace1' }]
+      });
+
+      const changesText = `## File: [Workspace1] file1.js
+\`\`\`javascript
+console.log("1");
+\`\`\`
+
+## File: [Workspace1] file2.js
+\`\`\`javascript
+console.log("2");
+\`\`\``;
+
+      let callbackCount = 0;
+      const callback = (_workspace, changes) => {
+        callbackCount++;
+        assert.strictEqual(changes.length, 2);
+        return { count: changes.length, files: changes.map(c => c.filePath) };
+      };
+
+      const result = manager.applyChanges(changesText, callback);
+
+      assert.strictEqual(callbackCount, 1); // Only called once for the workspace
+      assert.strictEqual(result.count, 2);
+    });
+  });
 });
