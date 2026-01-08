@@ -52,6 +52,20 @@ class WorkspaceManager {
   }
 
   /**
+   * Get all workspaces
+   */
+  getWorkspaces() {
+    return this.workspaces;
+  }
+
+  /**
+   * Check if this is a multi-repo workspace
+   */
+  isMultiRepo() {
+    return this.workspaces && this.workspaces.length > 0;
+  }
+
+  /**
    * Get all valid workspaces
    */
   getValidWorkspaces() {
