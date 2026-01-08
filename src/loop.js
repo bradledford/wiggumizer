@@ -6,8 +6,9 @@ const ClaudeProvider = require('./providers/claude');
 const FileValidator = require('./validator');
 const GitHelper = require('./git-helper');
 const IterationLogger = require('./iteration-logger');
-const FileSelector = require('./file-selector');
 const ConvergenceAnalyzer = require('./convergence-analyzer');
+const WorkspaceManager = require('./workspace-manager');
+const PromptUpdater = require('./prompt-updater');
 
 class RalphLoop {
   constructor(options) {
@@ -22,6 +23,14 @@ class RalphLoop {
     this.iteration = 0;
     this.filesModifiedTotal = 0;
 
+    // Initialize workspace manager (handles multi-repo support)
+    this.workspaceManager = new WorkspaceManager({
+      workspaces: options.workspaces,
+      files: options.filePatterns,
+      context: options.contextLimits,
+      verbose: this.verbose
+    });
+
     // Initialize iteration logger
     this.logger = new IterationLogger();
 
@@ -29,6 +38,13 @@ class RalphLoop {
     this.convergence = new ConvergenceAnalyzer({
       threshold: this.convergenceThreshold,
       verbose: this.verbose
+    });
+
+    // Initialize prompt updater for work plan tracking
+    this.promptUpdater = new PromptUpdater({
+      promptPath: path.join(process.cwd(), options.prompt || 'PROMPT.md'),
+      verbose: this.verbose,
+      dryRun: this.dryRun
     });
 
     // Initialize provider
@@ -54,11 +70,32 @@ class RalphLoop {
 
     const startTime = Date.now();
 
-    // Warn if git repo is dirty
-    GitHelper.warnIfDirty();
+    // Show workspace info
+    const workspaces = this.workspaceManager.getWorkspaces();
+    if (this.workspaceManager.isMultiRepo()) {
+      console.log(chalk.blue('ℹ Multi-repo mode:') + chalk.dim(` ${workspaces.length} workspaces`));
+      for (const ws of workspaces) {
+        console.log(chalk.dim(`  - ${ws.name}: ${ws.path}`));
+      }
+      console.log();
+    }
 
-    // Store initial commit for rollback
-    const initialCommit = GitHelper.getCurrentCommit();
+    // Warn if git repos are dirty
+    for (const workspace of workspaces) {
+      if (this.workspaceManager.isMultiRepo()) {
+        console.log(chalk.dim(`Checking workspace: ${workspace.name}`));
+      }
+      GitHelper.warnIfDirty(workspace.absolutePath);
+    }
+
+    // Store initial commits for rollback (per workspace)
+    const initialCommits = new Map();
+    for (const workspace of workspaces) {
+      const commit = GitHelper.getCurrentCommit(workspace.absolutePath);
+      if (commit) {
+        initialCommits.set(workspace.name, commit);
+      }
+    }
 
     // Show auto-commit status
     if (this.autoCommit) {
@@ -70,6 +107,25 @@ class RalphLoop {
     // Show log location
     console.log(chalk.dim(`ℹ Logging to: ${this.logger.sessionDir}`));
     console.log();
+
+    // Load and show work plan progress
+    if (this.promptUpdater.load()) {
+      const progress = this.promptUpdater.getProgress();
+      if (progress.total > 0) {
+        console.log(chalk.blue('Work Plan Progress:') + chalk.dim(` ${progress.completed}/${progress.total} tasks completed (${progress.percentage}%)`));
+        const incomplete = this.promptUpdater.getIncompleteTasks();
+        if (incomplete.length > 0 && this.verbose) {
+          console.log(chalk.dim('  Remaining tasks:'));
+          incomplete.slice(0, 3).forEach(task => {
+            console.log(chalk.dim(`    - ${task.text}`));
+          });
+          if (incomplete.length > 3) {
+            console.log(chalk.dim(`    ... and ${incomplete.length - 3} more`));
+          }
+        }
+        console.log();
+      }
+    }
 
     let noChangeIterations = 0;
     let converged = false;
@@ -145,6 +201,30 @@ class RalphLoop {
           filesList: modifiedFilesList,
           response: response.raw || response.changes || ''
         });
+
+        // Update work plan progress based on this iteration
+        if (filesModified > 0) {
+          const updateContext = {
+            filesModified: modifiedFilesList,
+            completedWork: response.summary || response.reasoning || '',
+            gitLog: this.getGitLogForWorkspace()
+          };
+
+          const updateResult = this.promptUpdater.updateTaskStatus(updateContext);
+
+          if (updateResult.updated) {
+            this.promptUpdater.save();
+            if (this.verbose) {
+              console.log(chalk.green(`  ✓ Updated ${updateResult.count} task(s) in work plan`));
+            }
+
+            // Show updated progress
+            const progress = this.promptUpdater.getProgress();
+            if (progress.total > 0) {
+              console.log(chalk.dim(`  Progress: ${progress.completed}/${progress.total} (${progress.percentage}%)`));
+            }
+          }
+        }
 
         // Check for advanced convergence
         const convergenceCheck = this.convergence.checkConvergence();
@@ -266,69 +346,18 @@ class RalphLoop {
   }
 
   getCodebaseContext() {
-    const cwd = process.cwd();
-
-    // Use FileSelector for intelligent file selection
-    const selector = new FileSelector({
-      cwd,
-      include: this.filePatterns.include,
-      exclude: this.filePatterns.exclude,
-      respectGitignore: true,
-      maxContextSize: this.contextLimits.maxSize || 100000,
-      maxFiles: this.contextLimits.maxFiles || 50,
-      verbose: this.verbose
-    });
-
-    const files = selector.getFilesWithContent();
+    // Use WorkspaceManager to gather context from all workspaces
+    const context = this.workspaceManager.getCodebaseContext();
 
     if (this.verbose) {
-      const stats = selector.getStats();
-      console.log(chalk.dim(`  Selected ${stats.fileCount} files (${Math.round(stats.totalSize / 1024)}KB)`));
-    }
-
-    const context = {
-      cwd,
-      files
-    };
-
-    // Add git context for self-discovery (true Ralph philosophy)
-    if (GitHelper.isGitRepo()) {
-      const { execSync } = require('child_process');
-
-      try {
-        // Get recent commit history (shows what was done in auto-commit iterations)
-        const gitLog = execSync('git log --oneline -10 --decorate', {
-          encoding: 'utf-8',
-          cwd
-        }).trim();
-        if (gitLog) {
-          context.gitLog = gitLog;
-        }
-
-        // Get current git status
-        const gitStatus = execSync('git status --short', {
-          encoding: 'utf-8',
-          cwd
-        }).trim();
-        if (gitStatus) {
-          context.gitStatus = gitStatus;
-        }
-      } catch (error) {
-        // Git commands failed - not critical, continue without git context
-        if (this.verbose) {
-          console.log(chalk.dim('  Could not fetch git context'));
-        }
-      }
-    }
-
-    // Add breadcrumbs file if it exists (Claude's notes to itself)
-    const breadcrumbsPath = path.join(cwd, '.ralph-notes.md');
-    if (fs.existsSync(breadcrumbsPath)) {
-      try {
-        const breadcrumbs = fs.readFileSync(breadcrumbsPath, 'utf-8');
-        context.breadcrumbs = breadcrumbs;
-      } catch (error) {
-        // Not critical if we can't read it
+      if (context.isMultiRepo) {
+        const totalFiles = context.files.length;
+        const totalSize = context.files.reduce((sum, f) => sum + f.content.length, 0);
+        console.log(chalk.dim(`  Selected ${totalFiles} files across ${context.workspaces.length} workspaces (${Math.round(totalSize / 1024)}KB)`));
+      } else {
+        const totalFiles = context.files.length;
+        const totalSize = context.files.reduce((sum, f) => sum + f.content.length, 0);
+        console.log(chalk.dim(`  Selected ${totalFiles} files (${Math.round(totalSize / 1024)}KB)`));
       }
     }
 
@@ -337,88 +366,101 @@ class RalphLoop {
 
 
   applyChanges(changesText) {
-    // Parse Claude's response to extract file modifications
-    // Look for patterns like:
-    // ## File: path/to/file.js
-    // ```javascript
-    // file contents
-    // ```
+    // Use WorkspaceManager to apply changes to the appropriate workspace
+    const result = this.workspaceManager.applyChanges(changesText, (workspace, changes) => {
+      let filesModified = 0;
+      const modifiedFiles = [];
+      const backups = new Map();
 
-    const filePattern = /##\s*File:\s*([^\n]+)\n```[^\n]*\n([\s\S]*?)```/g;
-    let match;
-    let filesModified = 0;
-    const modifiedFiles = [];
-    const backups = new Map(); // Store backups in case we need to rollback
+      for (const { filePath, fileContent, fullPath } of changes) {
+        try {
+          // Validate file content before writing
+          const validation = FileValidator.validate(filePath, fileContent);
+          if (!validation.valid) {
+            console.error(chalk.red(`    ✗ Validation failed for ${filePath}`));
+            console.error(chalk.dim(`      ${validation.details}`));
+            console.log(chalk.yellow('      Skipping this file to prevent breaking changes'));
+            continue;
+          }
 
-    while ((match = filePattern.exec(changesText)) !== null) {
-      const filePath = match[1].trim();
-      const fileContent = match[2];
+          // Backup existing file
+          if (fs.existsSync(fullPath)) {
+            const backup = fs.readFileSync(fullPath, 'utf-8');
+            backups.set(fullPath, backup);
+          }
 
-      try {
-        const fullPath = path.join(process.cwd(), filePath);
+          // Ensure directory exists
+          const dir = path.dirname(fullPath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
 
-        // Validate file content before writing
-        const validation = FileValidator.validate(filePath, fileContent);
-        if (!validation.valid) {
-          console.error(chalk.red(`    ✗ Validation failed for ${filePath}`));
-          console.error(chalk.dim(`      ${validation.details}`));
-          console.log(chalk.yellow('      Skipping this file to prevent breaking changes'));
-          continue; // Skip this file
+          // Write the file
+          fs.writeFileSync(fullPath, fileContent, 'utf-8');
+
+          if (this.verbose) {
+            const displayPath = this.workspaceManager.isMultiRepo()
+              ? `[${workspace.name}] ${filePath}`
+              : filePath;
+            console.log(chalk.dim(`    Modified: ${displayPath}`));
+          }
+
+          filesModified++;
+          modifiedFiles.push(filePath);
+        } catch (error) {
+          console.error(chalk.red(`    ✗ Failed to write ${filePath}: ${error.message}`));
+
+          // Rollback any files we've modified so far
+          console.log(chalk.yellow('    Rolling back changes...'));
+          for (const [backupPath, backupContent] of backups) {
+            fs.writeFileSync(backupPath, backupContent, 'utf-8');
+          }
+          filesModified = 0;
+          modifiedFiles.length = 0;
+          break;
         }
-
-        // Backup existing file
-        if (fs.existsSync(fullPath)) {
-          const backup = fs.readFileSync(fullPath, 'utf-8');
-          backups.set(fullPath, backup);
-        }
-
-        // Ensure directory exists
-        const dir = path.dirname(fullPath);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
-
-        // Write the file
-        fs.writeFileSync(fullPath, fileContent, 'utf-8');
-
-        if (this.verbose) {
-          console.log(chalk.dim(`    Modified: ${filePath}`));
-        }
-
-        filesModified++;
-        modifiedFiles.push(filePath);
-      } catch (error) {
-        console.error(chalk.red(`    ✗ Failed to write ${filePath}: ${error.message}`));
-
-        // Rollback any files we've modified so far
-        console.log(chalk.yellow('    Rolling back changes...'));
-        for (const [backupPath, backupContent] of backups) {
-          fs.writeFileSync(backupPath, backupContent, 'utf-8');
-        }
-        filesModified = 0;
-        modifiedFiles.length = 0;
-        break;
       }
-    }
 
-    if (filesModified === 0 && this.verbose) {
+      // Create git backup if in a repo and files were modified (only if auto-commit is enabled)
+      if (filesModified > 0 && this.autoCommit && GitHelper.isGitRepo(workspace.absolutePath)) {
+        const committed = GitHelper.createBackupCommit(this.iteration, workspace.absolutePath);
+        if (committed && this.verbose) {
+          const repoLabel = this.workspaceManager.isMultiRepo()
+            ? `[${workspace.name}]`
+            : 'Git:';
+          console.log(chalk.dim(`    ${repoLabel} Auto-committed iteration ${this.iteration}`));
+        }
+      }
+
+      return {
+        count: filesModified,
+        files: modifiedFiles
+      };
+    });
+
+    if (result.count === 0 && this.verbose) {
       console.log(chalk.yellow('    ⚠ No file modifications detected in response'));
       console.log(chalk.dim('\n  Raw response:'));
       console.log(chalk.dim(changesText.substring(0, 500) + '...'));
     }
 
-    // Create git backup if in a repo and files were modified (only if auto-commit is enabled)
-    if (filesModified > 0 && this.autoCommit && GitHelper.isGitRepo()) {
-      const committed = GitHelper.createBackupCommit(this.iteration);
-      if (committed && this.verbose) {
-        console.log(chalk.dim(`    Git: Auto-committed iteration ${this.iteration}`));
-      }
-    }
+    return result;
+  }
 
-    return {
-      count: filesModified,
-      files: modifiedFiles
-    };
+  /**
+   * Get git log for work plan tracking
+   */
+  getGitLogForWorkspace() {
+    try {
+      const { execSync } = require('child_process');
+      const gitLog = execSync('git log --oneline -10', {
+        encoding: 'utf-8',
+        cwd: process.cwd()
+      }).trim();
+      return gitLog;
+    } catch (error) {
+      return '';
+    }
   }
 }
 

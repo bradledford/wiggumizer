@@ -1,10 +1,10 @@
-# Wiggumizer v0.2 - Refinement and Testing
+# Wiggumizer v0.3+ - Polish and Enhancement
 
-You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style iterative AI coding. All core features are complete. Now we focus on **polish, testing, and documentation**.
+You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style iterative AI coding. Core features are complete. Now we focus on **polish, testing, documentation, and user experience**.
 
-## Current State
+## Current State (v0.3.1)
 
-Wiggumizer v0.1 is feature-complete with:
+Wiggumizer has:
 - ✅ Full iteration loop with Claude Opus 4.5
 - ✅ Smart file selection (.gitignore, glob patterns, prioritization)
 - ✅ Advanced convergence detection (oscillation, hashing, confidence)
@@ -13,60 +13,39 @@ Wiggumizer v0.1 is feature-complete with:
 - ✅ Iteration logging and session tracking
 - ✅ Git integration (warnings, auto-commit)
 - ✅ File validation and safety (syntax checking, rollback)
+- ✅ Multi-repository workspace support
+- ✅ Automatic PROMPT.md progress tracking
 
-## Goals for v0.2
+## Work Plan
 
-### 1. Add Unit Tests
+### Testing & Quality
+- [x] Test convergence-analyzer.js (oscillation, hashing, confidence)
+- [x] Test error-handler.js (retry logic, circuit breaker, rate limiting)
+- [x] Test prompt-updater.js (task parsing, completion detection)
+- [ ] Test file-selector.js (glob matching, .gitignore parsing, prioritization)
+- [ ] Test config.js (config loading and merging)
+- [ ] Add integration test for full loop execution
 
-Create `test/` directory with tests for:
-- **src/convergence-analyzer.js** - Test oscillation detection, hashing, confidence scoring
-- **src/error-handler.js** - Test retry logic, error classification, circuit breaker
-- **src/file-selector.js** - Test glob matching, .gitignore parsing, prioritization
-- **src/config.js** - Test config loading and merging
+### Error Messages & UX
+- [ ] Better API key missing message with example .env file
+- [ ] Better PROMPT.md missing message with examples
+- [ ] When convergence fails, suggest prompt improvements
+- [ ] When oscillation detected, show the conflicting states clearly
 
-Use a simple test framework (Jest or built-in Node test runner).
+### Documentation
+- [ ] Update README.md with clear quick start guide
+- [ ] Add real-world examples (not just theory)
+- [ ] Add troubleshooting section
+- [ ] Add FAQ about common issues
+- [ ] Document performance tips (context size, iteration limits)
+- [ ] Document the new PROMPT.md progress tracking feature
 
-### 2. Improve Error Messages
-
-Make error messages more helpful:
-- When API key is missing, show example .env file
-- When PROMPT.md is missing, show example prompt
-- When convergence fails, suggest prompt improvements
-- When oscillation detected, show the conflicting states
-
-### 3. Add Progress Indicators
-
-Enhance the loop output:
-- Show estimated time remaining (based on average iteration time)
-- Display token usage per iteration (if available from API)
-- Show real-time convergence confidence as it increases
-- Add a summary dashboard at the end
-
-### 4. Add `wiggumize init` Wizard
-
-Make `wiggumize init` interactive:
-- Ask which AI provider to use (Claude/OpenAI)
-- Ask for typical project type (Node.js/Python/etc.)
-- Generate appropriate file patterns
-- Create sample PROMPT.md with examples
-- Validate API key before finishing
-
-### 5. Improve Documentation
-
-Update README.md with:
-- Clear quick start guide
-- Real-world examples (not just theory)
-- Troubleshooting section
-- FAQ about common issues
-- Performance tips (context size, iteration limits)
-
-### 6. Add Multi-Provider Support
-
-Complete OpenAI provider implementation:
-- Create `src/providers/openai.js` similar to claude.js
-- Support GPT-5 and GPT-4
-- Handle different token limits
-- Test with both providers
+### Nice-to-Have Features
+- [ ] Make `wiggumize init` interactive (ask for provider, project type, etc.)
+- [ ] Show estimated time remaining based on average iteration time
+- [ ] Display token usage per iteration if available from API
+- [ ] Add summary dashboard at loop completion
+- [ ] Add OpenAI provider support (src/providers/openai.js)
 
 ## Implementation Philosophy
 
@@ -77,29 +56,19 @@ Complete OpenAI provider implementation:
 - Don't over-engineer
 
 **Priority:**
-1. Tests first (validate what we've built)
+1. Testing (validate what we've built)
 2. Error messages (improve user experience)
 3. Documentation (help others use it)
-4. Nice-to-haves (progress indicators, wizard)
+4. Nice-to-haves (when time permits)
 
-## Success Criteria
+## Current Focus
 
-Wiggumizer v0.2 is complete when:
-- ✅ Core modules have test coverage
-- ✅ Error messages are helpful and actionable
-- ✅ README.md has complete examples
-- ✅ `wiggumize init` is interactive and helpful
-- ✅ OpenAI provider works alongside Claude
+Start with the highest priority incomplete tasks:
+1. `test/file-selector.test.js` - Critical untested module
+2. `test/config.test.js` - Ensure config system works correctly
+3. Error message improvements - Make failures more helpful
+4. README.md updates - Help users get started
 
-## Current Files to Focus On
-
-Start with whichever makes the most sense:
-- `test/convergence-analyzer.test.js` - Add tests for convergence logic
-- `test/error-handler.test.js` - Add tests for retry and rate limiting
-- `README.md` - Improve with real examples
-- `src/cli.js` - Make init command interactive
-- `src/providers/openai.js` - Add OpenAI support
-
-**Remember:** You don't need to do everything at once. Pick ONE thing, do it well, let the loop iterate.
+**Remember:** Pick ONE thing, do it well, let the loop iterate. The automatic progress tracking will mark tasks complete as you go!
 
 Let's refine this tool! 🎯

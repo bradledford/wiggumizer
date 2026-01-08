@@ -1,6 +1,6 @@
 {
   "name": "wiggumizer",
-  "version": "0.1.0",
+  "version": "0.3.1",
   "description": "Ralph Wiggum style AI coding automation - deterministic imperfection meets eventual consistency",
   "main": "src/index.js",
   "bin": {

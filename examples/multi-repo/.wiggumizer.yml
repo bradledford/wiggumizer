@@ -1,0 +1,64 @@
+# Multi-Repo Workspace Example
+# This configuration shows how to use Wiggumizer across multiple repositories
+
+# Provider configuration
+provider: claude
+
+# Maximum iterations
+maxIterations: 20
+
+# Auto-commit changes to each repo after iterations
+autoCommit: true
+
+# Multi-repo workspace configuration
+workspaces:
+  # Backend API repository
+  - name: backend
+    path: ../my-backend-api
+    include:
+      - "src/**/*.js"
+      - "src/**/*.ts"
+      - "package.json"
+      - "README.md"
+    exclude:
+      - "src/**/*.test.js"
+      - "dist/**"
+      - "node_modules/**"
+    context:
+      maxSize: 50000
+      maxFiles: 30
+
+  # Frontend application repository
+  - name: frontend
+    path: ../my-frontend-app
+    include:
+      - "src/**/*.tsx"
+      - "src/**/*.ts"
+      - "src/**/*.css"
+      - "package.json"
+    exclude:
+      - "src/**/*.test.tsx"
+      - "build/**"
+      - "node_modules/**"
+    context:
+      maxSize: 50000
+      maxFiles: 30
+
+  # Shared utilities repository
+  - name: shared
+    path: ../shared-utils
+    include:
+      - "src/**/*.ts"
+      - "package.json"
+    exclude:
+      - "dist/**"
+      - "node_modules/**"
+    context:
+      maxSize: 20000
+      maxFiles: 15
+
+# Provider-specific settings
+providers:
+  claude:
+    model: claude-opus-4-5-20251101
+    maxTokens: 8192

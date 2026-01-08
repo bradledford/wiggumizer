@@ -143,27 +143,54 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
     // Build a clean, constant prompt structure (true Ralph style)
     let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
 
-    // Add breadcrumbs if your past self left notes (UNIQUE FEATURE!)
-    if (context.breadcrumbs) {
-      message += `# Notes from Your Previous Self:\n`;
-      message += `Your past iterations left these breadcrumbs in .ralph-notes.md:\n\n`;
-      message += `${context.breadcrumbs}\n\n`;
-      message += `You can update .ralph-notes.md with new insights for your future self.\n\n`;
+    // Handle multi-repo workspace context
+    if (context.isMultiRepo) {
+      message += `# Workspace Configuration:\n`;
+      message += `You are working across ${context.workspaces.length} repositories:\n\n`;
+
+      for (const ws of context.workspaces) {
+        message += `## Workspace: ${ws.name}\n`;
+        message += `Path: ${ws.path}\n`;
+        message += `Files: ${ws.fileCount}\n`;
+
+        // Add git context per workspace
+        if (ws.gitContext?.gitLog) {
+          message += `Git History:\n\`\`\`\n${ws.gitContext.gitLog}\n\`\`\`\n`;
+        }
+        if (ws.gitContext?.gitStatus) {
+          message += `Git Status:\n\`\`\`\n${ws.gitContext.gitStatus}\n\`\`\`\n`;
+        }
+        message += `\n`;
+      }
+
+      message += `**IMPORTANT**: When outputting file changes, prefix the file path with the workspace name:\n`;
+      message += `## File: [workspace-name] path/to/file.js\n`;
+      message += `Example: ## File: [backend] src/api/users.js\n\n`;
     } else {
-      message += `# Breadcrumbs:\n`;
-      message += `You can create a file called .ralph-notes.md to leave notes for your future iterations.\n`;
-      message += `Use it to track progress, document blockers, or remind yourself of the plan.\n\n`;
-    }
+      // Single-repo mode - original behavior
 
-    // Add git context if available (KEY for self-discovery)
-    if (context.gitLog) {
-      message += `# Your Work History (git log):\n`;
-      message += `You can see what you've done in previous iterations:\n\n`;
-      message += `\`\`\`\n${context.gitLog}\n\`\`\`\n\n`;
-    }
+      // Add breadcrumbs if your past self left notes (UNIQUE FEATURE!)
+      if (context.breadcrumbs) {
+        message += `# Notes from Your Previous Self:\n`;
+        message += `Your past iterations left these breadcrumbs in .ralph-notes.md:\n\n`;
+        message += `${context.breadcrumbs}\n\n`;
+        message += `You can update .ralph-notes.md with new insights for your future self.\n\n`;
+      } else {
+        message += `# Breadcrumbs:\n`;
+        message += `You can create a file called .ralph-notes.md to leave notes for your future iterations.\n`;
+        message += `Use it to track progress, document blockers, or remind yourself of the plan.\n\n`;
+      }
 
-    if (context.gitStatus) {
-      message += `# Git Status:\n\`\`\`\n${context.gitStatus}\n\`\`\`\n\n`;
+      // Add git context if available (KEY for self-discovery)
+      if (context.gitLog) {
+        message += `# Your Work History (git log):\n`;
+        message += `You can see what you've done in previous iterations:\n\n`;
+        message += `\`\`\`\n${context.gitLog}\n\`\`\`\n\n`;
+      }
+
+      if (context.gitStatus) {
+        message += `# Git Status:\n\`\`\`\n${context.gitStatus}\n\`\`\`\n\n`;
+      }
     }
 
     // Add test results if available (feedback loop for TDD)
@@ -177,12 +204,21 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
 
     // Add file contents
     for (const file of context.files) {
-      message += `## File: ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+      if (context.isMultiRepo) {
+        // Multi-repo: include workspace tag
+        message += `## File: [${file.workspace}] ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+      } else {
+        // Single-repo: original format
+        message += `## File: ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+      }
     }
 
     // Simple, constant instructions (no variation by iteration)
     message += `\n---\n\n`;
     message += `Examine the codebase above. Make substantial progress toward the goal.\n`;
+    if (context.isMultiRepo) {
+      message += `Remember: Changes may span multiple repositories. Tag each file with its workspace.\n`;
+    }
     message += `Remember: You are building on your own prior work. The files show your progress.`;
 
     return message;

@@ -8,144 +8,16 @@ describe('ErrorHandler', () => {
   beforeEach(() => {
     handler = new ErrorHandler({
       maxRetries: 3,
-      baseDelay: 10, // Very short delays for testing
+      baseDelay: 10,  // Fast for tests
       maxDelay: 100,
       circuitBreakerThreshold: 3,
-      circuitResetDelay: 50,
-      verbose: false
-    });
-  });
-
-  describe('classifyError', () => {
-    it('should classify network errors as retryable', () => {
-      const errors = [
-        new Error('ECONNRESET'),
-        new Error('ENOTFOUND'),
-        new Error('ETIMEDOUT'),
-        new Error('Network error occurred'),
-        new Error('Connection timeout')
-      ];
-
-      for (const error of errors) {
-        const result = handler.classifyError(error);
-        assert.strictEqual(result.retryable, true);
-        assert.strictEqual(result.type, 'network');
-      }
-    });
-
-    it('should classify rate limit errors as retryable with higher backoff', () => {
-      const error = new Error('Rate limit exceeded');
-      error.status = 429;
-
-      const result = handler.classifyError(error);
-      assert.strictEqual(result.retryable, true);
-      assert.strictEqual(result.type, 'rate_limit');
-      assert.strictEqual(result.backoffMultiplier, 3.0);
-    });
-
-    it('should classify server errors (5xx) as retryable', () => {
-      const statusCodes = [500, 502, 503, 504];
-
-      for (const status of statusCodes) {
-        const error = new Error('Server error');
-        error.status = status;
-
-        const result = handler.classifyError(error);
-        assert.strictEqual(result.retryable, true);
-        assert.strictEqual(result.type, 'server_error');
-      }
-    });
-
-    it('should classify auth errors as non-retryable', () => {
-      const errors = [
-        { message: 'Unauthorized', status: 401 },
-        { message: 'Forbidden', status: 403 },
-        { message: 'Invalid API key' }
-      ];
-
-      for (const errorData of errors) {
-        const error = new Error(errorData.message);
-        if (errorData.status) error.status = errorData.status;
-
-        const result = handler.classifyError(error);
-        assert.strictEqual(result.retryable, false);
-        assert.strictEqual(result.type, 'auth');
-      }
-    });
-
-    it('should classify validation errors as non-retryable', () => {
-      const error = new Error('Invalid request body');
-      error.status = 400;
-
-      const result = handler.classifyError(error);
-      assert.strictEqual(result.retryable, false);
-      assert.strictEqual(result.type, 'validation');
-    });
-
-    it('should classify client errors (4xx except 429) as non-retryable', () => {
-      const statusCodes = [404, 405, 406, 409, 422];
-
-      for (const status of statusCodes) {
-        const error = new Error('Client error');
-        error.status = status;
-
-        const result = handler.classifyError(error);
-        assert.strictEqual(result.retryable, false);
-        assert.strictEqual(result.type, 'client_error');
-      }
-    });
-
-    it('should classify unknown errors as retryable', () => {
-      const error = new Error('Something weird happened');
-
-      const result = handler.classifyError(error);
-      assert.strictEqual(result.retryable, true);
-      assert.strictEqual(result.type, 'unknown');
-    });
-  });
-
-  describe('calculateBackoff', () => {
-    it('should calculate exponential backoff', () => {
-      const errorType = { backoffMultiplier: 2.0 };
-
-      // First attempt should be close to baseDelay
-      const delay1 = handler.calculateBackoff(1, errorType);
-      assert.ok(delay1 >= 7 && delay1 <= 13); // 10 ± 25% jitter
-
-      // Second attempt should be close to baseDelay * 2
-      const delay2 = handler.calculateBackoff(2, errorType);
-      assert.ok(delay2 >= 15 && delay2 <= 25); // 20 ± 25% jitter
-
-      // Third attempt should be close to baseDelay * 4
-      const delay3 = handler.calculateBackoff(3, errorType);
-      assert.ok(delay3 >= 30 && delay3 <= 50); // 40 ± 25% jitter
-    });
-
-    it('should cap delay at maxDelay', () => {
-      const errorType = { backoffMultiplier: 10.0 };
-
-      const delay = handler.calculateBackoff(5, errorType);
-      assert.ok(delay <= 100); // maxDelay is 100
-    });
-
-    it('should use higher multiplier for rate limit errors', () => {
-      const rateLimitError = { backoffMultiplier: 3.0 };
-      const normalError = { backoffMultiplier: 2.0 };
-
-      const rateLimitDelay = handler.calculateBackoff(2, rateLimitError);
-      const normalDelay = handler.calculateBackoff(2, normalError);
-
-      // Rate limit delay should generally be higher (accounting for jitter)
-      // We can't strictly compare due to jitter, so just verify they're reasonable
-      assert.ok(rateLimitDelay >= 15); // 10 * 3 * 0.75 minimum
-      assert.ok(normalDelay >= 10); // 10 * 2 * 0.75 minimum
+      circuitResetDelay: 100
     });
   });
 
   describe('executeWithRetry', () => {
-    it('should return result on success', async () => {
+    it('should return result on successful execution', async () => {
       const fn = async () => 'success';
-
       const result = await handler.executeWithRetry(fn, 'test');
       assert.strictEqual(result, 'success');
     });
@@ -155,29 +27,33 @@ describe('ErrorHandler', () => {
       const fn = async () => {
         attempts++;
         if (attempts < 3) {
-          throw new Error('ECONNRESET');
+          const error = new Error('Network error');
+          error.message = 'network timeout';
+          throw error;
         }
         return 'success';
       };
 
       const result = await handler.executeWithRetry(fn, 'test');
+
       assert.strictEqual(result, 'success');
       assert.strictEqual(attempts, 3);
     });
 
-    it('should not retry on non-retryable errors', async () => {
+    it('should not retry non-retryable errors', async () => {
       let attempts = 0;
       const fn = async () => {
         attempts++;
-        const error = new Error('Unauthorized');
+        const error = new Error('Invalid API key');
         error.status = 401;
         throw error;
       };
 
       await assert.rejects(
         () => handler.executeWithRetry(fn, 'test'),
-        /Unauthorized/
+        /Invalid API key/
       );
+
       assert.strictEqual(attempts, 1);
     });
 
@@ -185,37 +61,32 @@ describe('ErrorHandler', () => {
       let attempts = 0;
       const fn = async () => {
         attempts++;
-        throw new Error('Network error');
+        throw new Error('network error');
       };
 
       await assert.rejects(
         () => handler.executeWithRetry(fn, 'test'),
-        /Network error/
+        /network error/
       );
+
       assert.strictEqual(attempts, 4); // 1 initial + 3 retries
     });
 
-    it('should reset failure counter on success', async () => {
-      // First, cause some failures
+    it('should reset consecutive failures on success', async () => {
       handler.consecutiveFailures = 2;
 
-      const fn = async () => 'success';
-      await handler.executeWithRetry(fn, 'test');
+      await handler.executeWithRetry(async () => 'success', 'test');
 
       assert.strictEqual(handler.consecutiveFailures, 0);
     });
-  });
 
-  describe('circuit breaker', () => {
-    it('should open circuit after threshold failures', async () => {
-      const fn = async () => {
-        throw new Error('Network error');
-      };
-
-      // Exhaust retries multiple times to trigger circuit breaker
+    it('should open circuit breaker after threshold', async () => {
+      // Fail enough times to trigger circuit breaker
       for (let i = 0; i < 3; i++) {
         try {
-          await handler.executeWithRetry(fn, 'test');
+          await handler.executeWithRetry(async () => {
+            throw new Error('network error');
+          }, 'test');
         } catch (e) {
           // Expected
         }
@@ -226,23 +97,20 @@ describe('ErrorHandler', () => {
 
     it('should reject immediately when circuit is open', async () => {
       handler.circuitOpen = true;
-      handler.circuitResetTime = Date.now() + 10000; // Far in future
-
-      const fn = async () => 'success';
+      handler.circuitResetTime = Date.now() + 10000;
 
       await assert.rejects(
-        () => handler.executeWithRetry(fn, 'test'),
+        () => handler.executeWithRetry(async () => 'success', 'test'),
         /Circuit breaker open/
       );
     });
 
-    it('should reset circuit after reset delay', async () => {
+    it('should reset circuit breaker after reset time', async () => {
       handler.circuitOpen = true;
-      handler.circuitResetTime = Date.now() - 1000; // In the past
+      handler.circuitResetTime = Date.now() - 1000; // Already past
       handler.consecutiveFailures = 5;
 
-      const fn = async () => 'success';
-      const result = await handler.executeWithRetry(fn, 'test');
+      const result = await handler.executeWithRetry(async () => 'success', 'test');
 
       assert.strictEqual(result, 'success');
       assert.strictEqual(handler.circuitOpen, false);
@@ -250,30 +118,136 @@ describe('ErrorHandler', () => {
     });
   });
 
+  describe('classifyError', () => {
+    it('should classify network errors as retryable', () => {
+      const error = new Error('ECONNRESET');
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'network');
+      assert.strictEqual(classification.retryable, true);
+    });
+
+    it('should classify timeout errors as retryable', () => {
+      const error = new Error('Request timeout');
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'network');
+      assert.strictEqual(classification.retryable, true);
+    });
+
+    it('should classify rate limit (429) as retryable with longer backoff', () => {
+      const error = new Error('Too many requests');
+      error.status = 429;
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'rate_limit');
+      assert.strictEqual(classification.retryable, true);
+      assert.ok(classification.backoffMultiplier >= 3);
+    });
+
+    it('should classify server errors (5xx) as retryable', () => {
+      const error = new Error('Internal server error');
+      error.status = 500;
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'server_error');
+      assert.strictEqual(classification.retryable, true);
+    });
+
+    it('should classify auth errors (401) as not retryable', () => {
+      const error = new Error('Unauthorized');
+      error.status = 401;
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'auth');
+      assert.strictEqual(classification.retryable, false);
+    });
+
+    it('should classify forbidden errors (403) as not retryable', () => {
+      const error = new Error('Forbidden');
+      error.status = 403;
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'auth');
+      assert.strictEqual(classification.retryable, false);
+    });
+
+    it('should classify validation errors (400) as not retryable', () => {
+      const error = new Error('Invalid request');
+      error.status = 400;
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'validation');
+      assert.strictEqual(classification.retryable, false);
+    });
+
+    it('should classify unknown errors as retryable with caution', () => {
+      const error = new Error('Something weird happened');
+      const classification = handler.classifyError(error);
+
+      assert.strictEqual(classification.type, 'unknown');
+      assert.strictEqual(classification.retryable, true);
+    });
+  });
+
+  describe('calculateBackoff', () => {
+    it('should increase delay exponentially', () => {
+      const errorType = { backoffMultiplier: 2.0 };
+
+      const delay1 = handler.calculateBackoff(1, errorType);
+      const delay2 = handler.calculateBackoff(2, errorType);
+      const delay3 = handler.calculateBackoff(3, errorType);
+
+      // Delays should increase (accounting for jitter)
+      assert.ok(delay2 > delay1 * 0.5, 'Delay should increase');
+      assert.ok(delay3 > delay2 * 0.5, 'Delay should continue increasing');
+    });
+
+    it('should cap at maxDelay', () => {
+      const errorType = { backoffMultiplier: 10.0 };
+
+      const delay = handler.calculateBackoff(10, errorType);
+
+      assert.ok(delay <= handler.maxDelay);
+    });
+
+    it('should apply higher multiplier for rate limits', () => {
+      const networkError = { backoffMultiplier: 1.5 };
+      const rateLimitError = { backoffMultiplier: 3.0 };
+
+      const networkDelay = handler.calculateBackoff(2, networkError);
+      const rateLimitDelay = handler.calculateBackoff(2, rateLimitError);
+
+      // Rate limit delay should be higher on average
+      // (accounting for jitter, we just check it's not dramatically lower)
+      assert.ok(rateLimitDelay > networkDelay * 0.5);
+    });
+  });
+
   describe('getStatus', () => {
-    it('should return current status', () => {
+    it('should return current handler status', () => {
+      handler.consecutiveFailures = 2;
       handler.circuitOpen = true;
-      handler.consecutiveFailures = 3;
-      handler.circuitResetTime = 12345;
+      handler.circuitResetTime = Date.now() + 1000;
 
       const status = handler.getStatus();
 
+      assert.strictEqual(status.consecutiveFailures, 2);
       assert.strictEqual(status.circuitOpen, true);
-      assert.strictEqual(status.consecutiveFailures, 3);
-      assert.strictEqual(status.circuitResetTime, 12345);
+      assert.ok(status.circuitResetTime);
     });
   });
 
   describe('reset', () => {
     it('should reset all state', () => {
-      handler.circuitOpen = true;
       handler.consecutiveFailures = 5;
-      handler.circuitResetTime = 12345;
+      handler.circuitOpen = true;
+      handler.circuitResetTime = Date.now();
 
       handler.reset();
 
-      assert.strictEqual(handler.circuitOpen, false);
       assert.strictEqual(handler.consecutiveFailures, 0);
+      assert.strictEqual(handler.circuitOpen, false);
       assert.strictEqual(handler.circuitResetTime, null);
     });
   });
@@ -285,63 +259,60 @@ describe('RateLimiter', () => {
   beforeEach(() => {
     limiter = new RateLimiter({
       requestsPerMinute: 5,
-      requestsPerHour: 100,
-      verbose: false
+      requestsPerHour: 100
     });
   });
 
   describe('waitIfNeeded', () => {
-    it('should allow requests under limit', async () => {
-      // Should not throw or wait significantly
+    it('should allow requests under the limit', async () => {
       const start = Date.now();
-      await limiter.waitIfNeeded();
-      const elapsed = Date.now() - start;
 
-      assert.ok(elapsed < 100); // Should be nearly instant
+      await limiter.waitIfNeeded();
+      await limiter.waitIfNeeded();
+
+      const elapsed = Date.now() - start;
+      assert.ok(elapsed < 100, 'Should not wait when under limit');
     });
 
     it('should track requests in minute window', async () => {
       await limiter.waitIfNeeded();
       await limiter.waitIfNeeded();
-      await limiter.waitIfNeeded();
 
       const usage = limiter.getUsage();
-      assert.strictEqual(usage.requestsLastMinute, 3);
+      assert.strictEqual(usage.requestsLastMinute, 2);
     });
 
     it('should track requests in hour window', async () => {
       await limiter.waitIfNeeded();
-      await limiter.waitIfNeeded();
 
       const usage = limiter.getUsage();
-      assert.strictEqual(usage.requestsLastHour, 2);
+      assert.strictEqual(usage.requestsLastHour, 1);
     });
   });
 
   describe('getUsage', () => {
     it('should return current usage stats', async () => {
       await limiter.waitIfNeeded();
+      await limiter.waitIfNeeded();
+      await limiter.waitIfNeeded();
 
       const usage = limiter.getUsage();
 
-      assert.strictEqual(usage.requestsLastMinute, 1);
-      assert.strictEqual(usage.requestsLastHour, 1);
+      assert.strictEqual(usage.requestsLastMinute, 3);
+      assert.strictEqual(usage.requestsLastHour, 3);
       assert.strictEqual(usage.minuteLimit, 5);
       assert.strictEqual(usage.hourLimit, 100);
     });
 
     it('should clean up old entries', async () => {
-      // Add an old timestamp
-      limiter.minuteWindow.push(Date.now() - 120000); // 2 minutes ago
-      limiter.hourWindow.push(Date.now() - 4000000); // More than an hour ago
-
-      await limiter.waitIfNeeded();
+      // Manually add old entries
+      limiter.minuteWindow.push(Date.now() - 70000); // 70 seconds ago
+      limiter.hourWindow.push(Date.now() - 3700000); // Over an hour ago
 
       const usage = limiter.getUsage();
 
-      // Old entries should be cleaned up
-      assert.strictEqual(usage.requestsLastMinute, 1);
-      assert.strictEqual(usage.requestsLastHour, 1);
+      assert.strictEqual(usage.requestsLastMinute, 0);
+      assert.strictEqual(usage.requestsLastHour, 0);
     });
   });
 

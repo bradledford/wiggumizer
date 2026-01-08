@@ -38,6 +38,7 @@ class ConfigLoader {
           '*.log'
         ]
       },
+      workspaces: null, // Multi-repo support: array of workspace configs
       retry: {
         maxRetries: 3,
         baseDelay: 1000,  // 1 second
@@ -190,6 +191,21 @@ files:
     - "package-lock.json"
     - "yarn.lock"
     - "*.log"
+
+# Multi-repo workspace support
+# Uncomment to work across multiple repositories
+# workspaces:
+#   - name: backend          # Optional: friendly name for logging
+#     path: ../my-backend    # Relative or absolute path
+#     include:               # Optional: override file patterns
+#       - "src/**/*.js"
+#     exclude:
+#       - "test/**"
+#   - name: frontend
+#     path: ../my-frontend
+#     include:
+#       - "src/**/*.tsx"
+#       - "src/**/*.ts"
 
 # Retry configuration for API calls
 retry:

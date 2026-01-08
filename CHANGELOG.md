@@ -1,12 +1,167 @@
 # Wiggumizer Change Summary
 
-*Generated on 2026-01-07T03:15:58.197Z*
+## v0.3.1 - Automatic Work Plan Progress Tracking
+
+*Added on 2026-01-08*
+
+### 🎉 New Feature: Automatic PROMPT.md Progress Tracking
+
+Wiggumizer now automatically tracks and updates completion status of tasks in your PROMPT.md work plan. No more manually updating checkboxes - the system detects completed work and marks tasks as done automatically.
+
+### How It Works
+
+1. **Checkbox Syntax**: Use standard markdown checkbox syntax in PROMPT.md:
+   ```markdown
+   - [ ] Add error handling
+   - [ ] Create tests
+   - [ ] Update documentation
+   ```
+
+2. **Automatic Detection**: After each iteration, Wiggumizer analyzes:
+   - Files that were modified
+   - Keywords in commit messages
+   - Test results (if available)
+   - Completed work descriptions
+
+3. **Progress Updates**: When tasks are detected as complete, checkboxes are automatically updated:
+   ```markdown
+   - [✅] Add error handling
+   - [✅] Create tests
+   - [ ] Update documentation
+   ```
+
+4. **Progress Display**: See real-time progress at the start of each run:
+   ```
+   Work Plan Progress: 2/3 tasks completed (67%)
+     Remaining tasks:
+       - Update documentation
+   ```
+
+### Changes
+
+**New Files:**
+- `src/prompt-updater.js` - Manages PROMPT.md parsing and progress tracking
+- `test/prompt-updater.test.js` - Comprehensive unit tests for task parsing and completion detection
+- `test/prompt-workflow.test.js` - Integration tests for multi-iteration workflows
+
+**Modified Files:**
+- `src/loop.js` - Integrated PromptUpdater for automatic progress tracking after each iteration
+
+### Features
+
+- **Smart Detection**: Multiple signals determine task completion (file matches, keyword analysis, git history)
+- **Nested Tasks**: Supports indented sub-tasks with proper hierarchy
+- **Preserves Context**: Non-task content in PROMPT.md is preserved
+- **Dry-Run Safe**: Progress tracking respects `--dry-run` mode
+- **Multiple Formats**: Supports various checkbox markers (`[x]`, `[X]`, `[✓]`, `[✅]`)
+
+### Example Workflow
+
+```markdown
+# My Project v2.0
+
+## Work Plan
+
+- [ ] Implement error handling for API
+- [ ] Add unit tests for error-handler.js
+- [ ] Update documentation with error codes
+```
+
+After running iterations that implement error handling and tests, PROMPT.md automatically becomes:
+
+```markdown
+# My Project v2.0
+
+## Work Plan
+
+- [✅] Implement error handling for API
+- [✅] Add unit tests for error-handler.js
+- [ ] Update documentation with error codes
+```
+
+---
+
+## v0.3.0 - Multi-Repository Workspace Support
+
+*Added on 2026-01-07*
+
+### 🎉 New Feature: Multi-Repo Workspaces
+
+Wiggumizer now supports working across multiple repositories in a single iteration loop. Perfect for:
+- Full-stack applications (frontend + backend)
+- Monorepo-style development
+- Microservices architectures
+- Projects split across multiple Git repositories
+
+### Changes
+
+**New Files:**
+- `src/workspace-manager.js` - Manages multiple repositories and coordinates file operations
+- `examples/multi-repo/.wiggumizer.yml` - Example multi-repo configuration
+- `examples/multi-repo/PROMPT.md` - Example multi-repo prompt
+- `examples/multi-repo/README.md` - Documentation for multi-repo feature
+
+**Modified Files:**
+- `src/config.js` - Added `workspaces` configuration option
+- `src/git-helper.js` - All methods now accept optional `cwd` parameter for multi-repo support
+- `src/loop.js` - Integrated WorkspaceManager for context gathering and change application
+- `src/providers/claude.js` - Updated prompts to include workspace context and file tagging
+
+### Configuration
+
+Add workspaces to `.wiggumizer.yml`:
+
+```yaml
+workspaces:
+  - name: backend
+    path: ../my-backend
+    include:
+      - "src/**/*.js"
+    exclude:
+      - "node_modules/**"
+
+  - name: frontend
+    path: ../my-frontend
+    include:
+      - "src/**/*.tsx"
+    exclude:
+      - "node_modules/**"
+```
+
+### File Output Format
+
+Claude now tags files with workspace names in multi-repo mode:
+
+```markdown
+## File: [backend] src/api/users.js
+## File: [frontend] src/components/UserList.tsx
+```
+
+### Features
+
+- ✅ Context gathering from all configured workspaces
+- ✅ Per-workspace file patterns and context limits
+- ✅ Per-workspace git operations (status, commits)
+- ✅ Smart file path resolution to correct repository
+- ✅ Automatic fallback for untagged files
+- ✅ Workspace-aware logging and progress tracking
+- ✅ Full backwards compatibility (single-repo mode still works)
+
+### Documentation
+
+See `examples/multi-repo/README.md` for complete documentation and usage examples.
+
+---
+
+## v0.2.0 - Testing and Error Handling
+
+*Generated on 2026-01-07T07:00:53.130Z*
 
 ## Overview
 
 **Iterations**: 3
-**Files Modified**: 3
-**Duration**: 119s
+**Files Modified**: 5
+**Duration**: 286s
 **Status**: Converged (File hashes stable for 3 iterations)
 
 ## Original Request
@@ -119,9 +274,9 @@ Let's refine this tool! 🎯
 
 ## Changes Applied
 
-- **Iteration 1**: Starting with the first priority: adding unit tests. I'll create tests for the convergence-analyzer.... (1 file)
-- **Iteration 2**: Adding tests for the convergence-analyzer.js module using Node's built-in test runner. (1 file)
-- **Iteration 3**: Adding unit tests for the error-handler module, continuing from previous iterations that added conve... (1 file)
+- **Iteration 1**: Adding comprehensive unit tests for the convergence-analyzer module using Node's built-in test runner. (1 file)
+- **Iteration 2**: Adding comprehensive unit tests for convergence-analyzer.js and error-handler.js using Node's built-in test runner (2 files)
+- **Iteration 3**: Adding comprehensive unit tests for convergence-analyzer, error-handler, file-selector, and config modules (2 files)
 
 ## Convergence Analysis
 
@@ -138,7 +293,7 @@ You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style
 
 ## Current State
 
-Modified 3 files through iterative refinement.
+Modified 5 files through iterative refinement.
 ```
 
 ## Suggested PR Description
@@ -152,12 +307,12 @@ You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style
 
 ## Changes Made
 
-This PR contains changes generated through 3 iterations of automated refinement, modifying 3 files.
+This PR contains changes generated through 3 iterations of automated refinement, modifying 5 files.
 
 **Key changes:**
-- Starting with the first priority: adding unit tests. I'll create tests for the convergence-analyzer....
-- Adding tests for the convergence-analyzer.js module using Node's built-in test runner.
-- Adding unit tests for the error-handler module, continuing from previous iterations that added conve...
+- Adding comprehensive unit tests for the convergence-analyzer module using Node's built-in test runner.
+- Adding comprehensive unit tests for convergence-analyzer.js and error-handler.js using Node's built-in test runner
+- Adding comprehensive unit tests for convergence-analyzer, error-handler, file-selector, and config modules
 
 ## Test Plan
 
