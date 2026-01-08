@@ -1,23 +1,23 @@
 # Wiggumizer Change Summary
 
-*Generated on 2026-01-08T22:01:16.485Z*
+*Generated on 2026-01-08T22:13:56.297Z*
 
 ## Overview
 
 **Iterations**: 3
-**Files Modified**: 3
-**Duration**: 181s
+**Files Modified**: 7
+**Duration**: 356s
 **Status**: Converged (File hashes stable for 3 iterations)
 
 ## Original Request
 
-# Wiggumizer v0.3+ - Polish and Enhancement
+# Wiggumizer v0.4+ - Documentation Reality Check & Feature Completion
 
-You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style iterative AI coding. Core features are complete. Now we focus on **polish, testing, documentation, and user experience**.
+You are refining Wiggumizer. A comprehensive docs analysis revealed **significant gaps** between documentation and implementation. Focus on **closing critical gaps** and **removing misleading documentation**.
 
 ## Current State (v0.3.1)
 
-Wiggumizer has:
+**Implemented Features:**
 - ✅ Full iteration loop with Claude Opus 4.5
 - ✅ Smart file selection (.gitignore, glob patterns, prioritization)
 - ✅ Advanced convergence detection (oscillation, hashing, confidence)
@@ -26,71 +26,155 @@ Wiggumizer has:
 - ✅ Iteration logging and session tracking
 - ✅ Git integration (warnings, auto-commit)
 - ✅ File validation and safety (syntax checking, rollback)
-- ✅ Multi-repository workspace support
+- ✅ Multi-repository workspace support (WorkspaceManager exists)
 - ✅ Automatic PROMPT.md progress tracking
+
+## Critical Issues Found
+
+### 📚 Docs Reference Missing Features
+The documentation extensively describes features that **don't exist**:
+- 8+ CLI commands documented but not implemented
+- 15+ `run` command options documented but missing
+- Template management system documented (8 commands) but returns "coming soon"
+- Multi-repo commands (`wiggumize multi`) documented but don't exist
+- 100+ documentation files referenced but missing
 
 ## Work Plan
 
-### Testing & Quality
-- [x] Test convergence-analyzer.js (oscillation, hashing, confidence)
-- [x] Test error-handler.js (retry logic, circuit breaker, rate limiting)
-- [x] Test prompt-updater.js (task parsing, completion detection)
-- [ ] Test file-selector.js (glob matching, .gitignore parsing, prioritization)
+### Phase 1: Critical Fixes (Stop Breaking User Experience)
+
+#### A. Fix Misleading CLI Documentation
+- [ ] Audit docs/cli-reference/ and mark unimplemented features as "Coming Soon"
+- [ ] Remove or clearly mark missing `run` command options in docs/cli-reference/commands/run.md
+- [ ] Add "Status: Not Yet Implemented" badges to aspirational docs
+- [ ] Create docs/ROADMAP.md showing what's planned vs implemented
+
+#### B. Implement High-Value Missing Options
+- [ ] Add `--watch` mode to `run` command (auto-restart on PROMPT.md changes)
+- [ ] Add `--files <glob>` option to `run` command (filter which files to include)
+- [ ] Add `--convergence-threshold <num>` option to `run` command
+- [ ] Add `--continue` option to resume from previous session
+- [ ] Add `--quiet` mode for less verbose output
+
+#### C. Fix Template Command
+- [ ] Either implement basic template management OR remove command and clarify it's coming later
+- [ ] If implementing: `template list` and `template show <name>` (read-only operations first)
+- [ ] Add template variable interpolation: `{{project_name}}`, `{{author}}`, `{{date}}`
+
+### Phase 2: Complete Existing Features
+
+#### A. Multi-Repo Commands (WorkspaceManager exists, needs CLI)
+- [ ] Implement `wiggumize multi status` - show workspace status
+- [ ] Implement `wiggumize multi run` - run across workspaces
+- [ ] Update docs/multi-repo/README.md with actual command syntax
+
+#### B. Testing & Quality
+- [x] Test convergence-analyzer.js
+- [x] Test error-handler.js
+- [x] Test prompt-updater.js
+- [x] Test file-selector.js (31/32 tests pass - fix priority bug)
 - [ ] Test config.js (config loading and merging)
+- [ ] Test workspace-manager.js (multi-repo support)
 - [ ] Add integration test for full loop execution
 
-### Error Messages & UX
-- [ ] Better API key missing message with example .env file
-- [ ] Better PROMPT.md missing message with examples
-- [ ] When convergence fails, suggest prompt improvements
-- [ ] When oscillation detected, show the conflicting states clearly
+#### C. Fix file-selector.js Priority Bug
+- [ ] Fix failing test: `.js` files should have higher priority than `.md` files
+- [ ] Verify prioritization logic matches documented behavior
+- [ ] Ensure PROMPT.md still gets highest priority
 
-### Documentation
-- [ ] Update README.md with clear quick start guide
-- [ ] Add real-world examples (not just theory)
-- [ ] Add troubleshooting section
-- [ ] Add FAQ about common issues
-- [ ] Document performance tips (context size, iteration limits)
-- [ ] Document the new PROMPT.md progress tracking feature
+### Phase 3: Documentation Cleanup
 
-### Nice-to-Have Features
-- [ ] Make `wiggumize init` interactive (ask for provider, project type, etc.)
+#### A. Create Missing Critical Docs
+- [ ] docs/cli-reference/configuration-file.md - Document actual config options
+- [ ] docs/getting-started/troubleshooting-setup.md - Help users debug setup
+- [ ] docs/troubleshooting/loop-not-converging.md - Help when convergence fails
+- [ ] docs/troubleshooting/provider-errors.md - Debug API issues
+- [ ] docs/appendices/faq.md - Answer common questions
+
+#### B. Fix Broken References
+- [ ] Audit all docs for broken internal links
+- [ ] Replace references to missing files with "Coming Soon" or alternative links
+- [ ] Update guides/README.md to remove references to non-existent guides
+
+#### C. Document Undocumented Features
+- [ ] Document `--auto-commit` flag in run.md
+- [ ] Document actual config options (context.maxSize, retry.*, rateLimit.*)
+- [ ] Document `wiggumize doctor` command
+- [ ] Document convergence analyzer behavior
+- [ ] Document PROMPT.md progress tracking feature (NEW in v0.3.1!)
+
+### Phase 4: Provider Support
+
+#### A. OpenAI Provider
+- [ ] Create src/providers/openai.js (GPT-4, GPT-3.5 support)
+- [ ] Add OpenAI to provider selection in cli.js
+- [ ] Update docs/ai-providers/openai/setup.md
+
+#### B. Provider Documentation
+- [ ] Clearly mark which providers are implemented vs planned
+- [ ] Update ai-providers/README.md with realistic status
+- [ ] Add provider fallback/rotation if primary fails
+
+### Phase 5: Nice-to-Have Enhancements
+
+#### A. CLI Improvements
+- [ ] Make `wiggumize init` interactive (ask questions vs require flags)
+- [ ] Add `--json` output mode for programmatic use
+- [ ] Add `--debug` flag for troubleshooting
+
+#### B. Monitoring & Observability
 - [ ] Show estimated time remaining based on average iteration time
-- [ ] Display token usage per iteration if available from API
-- [ ] Add summary dashboard at loop completion
-- [ ] Add OpenAI provider support (src/providers/openai.js)
+- [ ] Display token usage per iteration (if available from provider)
+- [ ] Add summary dashboard at loop completion with stats
 
-## Implementation Philosophy
+#### C. Template System (Full Implementation)
+- [ ] Template variable interpolation with helpers ({{uppercase}}, {{lowercase}})
+- [ ] Built-in variables ({{timestamp}}, {{git_branch}}, {{wiggumizer_version}})
+- [ ] Template management commands (create, edit, delete)
 
-**Keep following Ralph principles:**
+## Implementation Strategy
+
+**Priority Order:**
+1. **Fix Misleading Docs First** - Don't promise what doesn't exist
+2. **Implement High-Value Options** - --watch, --files, --convergence-threshold
+3. **Complete Existing Features** - Multi-repo CLI, test coverage
+4. **Provider Support** - OpenAI at minimum
+5. **Polish** - Better error messages, documentation
+
+**Principles:**
 - One improvement per iteration
-- Small, incremental changes
-- Trust the convergence process
-- Don't over-engineer
-
-**Priority:**
-1. Testing (validate what we've built)
-2. Error messages (improve user experience)
-3. Documentation (help others use it)
-4. Nice-to-haves (when time permits)
+- Test as you build
+- Update docs to match reality, not aspirations
+- Mark "Coming Soon" features clearly
+- Focus on user-facing value
 
 ## Current Focus
 
-Start with the highest priority incomplete tasks:
-1. `test/file-selector.test.js` - Critical untested module
-2. `test/config.test.js` - Ensure config system works correctly
-3. Error message improvements - Make failures more helpful
-4. README.md updates - Help users get started
+**Start here (highest impact):**
 
-**Remember:** Pick ONE thing, do it well, let the loop iterate. The automatic progress tracking will mark tasks complete as you go!
+1. **Fix file-selector.js priority bug** - Tests are failing, fix the actual bug
+2. **Audit docs/cli-reference/commands/run.md** - Mark unimplemented options clearly
+3. **Implement --watch mode** - High value feature that docs promise
+4. **Document --auto-commit** - Exists but undocumented
+5. **Create docs/ROADMAP.md** - Show users what's real vs planned
 
-Let's refine this tool! 🎯
+## Meta-Notes
+
+The docs were written aspirationally (describing the vision) rather than accurately (describing reality). This is **dangerous** - users will be frustrated when promised features don't work.
+
+**Two paths forward:**
+1. **Conservative**: Remove/mark aspirational docs as "Coming Soon"
+2. **Aggressive**: Implement the most critical missing features
+
+**Recommendation**: Do both - fix docs NOW, implement features over time.
+
+Let's make Wiggumizer's documentation match its reality! 🎯
 
 ## Changes Applied
 
-- **Iteration 1**: Creating comprehensive tests for config.js module (1 file)
-- **Iteration 2**: Complete test coverage for config.js module with tests for config loading, merging, and generation (1 file)
-- **Iteration 3**: Complete test suite for config.js module with comprehensive coverage of config loading, merging, and generation (1 file)
+- **Iteration 1**: Completing config.js tests and creating docs/ROADMAP.md to show implementation status (3 files)
+- **Iteration 2**: Creating comprehensive docs/ROADMAP.md to clearly distinguish implemented vs planned features, and completing config tests (2 files)
+- **Iteration 3**: Complete ROADMAP.md documentation and config.js test suite (2 files)
 
 ## Convergence Analysis
 
@@ -99,15 +183,15 @@ Let's refine this tool! 🎯
 ## Suggested Commit Message
 
 ```
-Wiggumizer v0.3+ - Polish and Enhancement
+Wiggumizer v0.4+ - Documentation Reality Check & Feature Completion
 
-# Wiggumizer v0.3+ - Polish and Enhancement
+# Wiggumizer v0.4+ - Documentation Reality Check & Feature Completion
 
-You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style iterative AI coding. Core features are complete. Now we focus on **polish, testing, documentation, and user experience**.
+You are refining Wiggumizer. A comprehensive docs analysis revealed **significant gaps** between documentation and implementation. Focus on **closing critical gaps** and **removing misleading documentation**.
 
 ## Current State (v0.3.1)
 
-Modified 3 files through iterative refinement.
+Modified 7 files through iterative refinement.
 ```
 
 ## Suggested PR Description
@@ -115,18 +199,18 @@ Modified 3 files through iterative refinement.
 ```markdown
 ## Summary
 
-# Wiggumizer v0.3+ - Polish and Enhancement
+# Wiggumizer v0.4+ - Documentation Reality Check & Feature Completion
 
-You are refining Wiggumizer - a fully functional CLI tool for Ralph Wiggum style iterative AI coding. Core features are complete. Now we focus on **polish, testing, documentation, and user experience**.
+You are refining Wiggumizer. A comprehensive docs analysis revealed **significant gaps** between documentation and implementation. Focus on **closing critical gaps** and **removing misleading documentation**.
 
 ## Changes Made
 
-This PR contains changes generated through 3 iterations of automated refinement, modifying 3 files.
+This PR contains changes generated through 3 iterations of automated refinement, modifying 7 files.
 
 **Key changes:**
-- Creating comprehensive tests for config.js module
-- Complete test coverage for config.js module with tests for config loading, merging, and generation
-- Complete test suite for config.js module with comprehensive coverage of config loading, merging, and generation
+- Completing config.js tests and creating docs/ROADMAP.md to show implementation status
+- Creating comprehensive docs/ROADMAP.md to clearly distinguish implemented vs planned features, and completing config tests
+- Complete ROADMAP.md documentation and config.js test suite
 
 ## Test Plan
 
