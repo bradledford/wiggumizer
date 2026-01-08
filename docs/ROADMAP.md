@@ -1,196 +1,180 @@
 # Wiggumizer Roadmap
 
-> Transparency about what's implemented vs. what's planned
+> **Transparency Note**: This document clearly distinguishes between what's implemented and what's planned. We believe in honest documentation.
 
-Last updated: 2024
+## Current Version: v0.3.1
 
-## Status Legend
-
-| Status | Meaning |
-|--------|---------|
-| ✅ Implemented | Feature is complete and tested |
-| 🚧 In Progress | Currently being developed |
-| 📋 Planned | On the roadmap, not yet started |
-| 💡 Proposed | Under consideration |
+Released: January 2025
 
 ---
 
-## Core Features
+## ✅ Implemented Features
 
-### Loop Execution
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Basic Ralph loop | ✅ Implemented | `wiggumize run` |
-| Iteration logging | ✅ Implemented | Stored in `.wiggumizer/iterations/` |
-| Convergence detection | ✅ Implemented | Multiple detection strategies |
-| Dry run mode | ✅ Implemented | `--dry-run` flag |
-| Auto-commit | ✅ Implemented | `--auto-commit` flag |
-| Verbose output | ✅ Implemented | `--verbose` flag |
-| Work plan tracking | ✅ Implemented | Auto-updates PROMPT.md checkboxes |
+These features are fully functional and tested:
 
-### File Selection
-| Feature | Status | Notes |
-|---------|--------|-------|
-| .gitignore support | ✅ Implemented | Automatic |
-| Glob patterns | ✅ Implemented | Via config |
-| File prioritization | ✅ Implemented | Smart ordering |
-| Context size limits | ✅ Implemented | Configurable |
+### Core Loop
+- **Ralph iteration loop** - Full implementation with Claude Opus 4.5
+- **Smart file selection** - .gitignore respect, glob patterns, priority-based selection
+- **Convergence detection** - Hash comparison, oscillation detection, confidence scoring
+- **Error handling** - Retry with exponential backoff, circuit breaker, rate limiting
+- **Configuration system** - .wiggumizer.yml with layered config (defaults < user < project < CLI)
+- **Iteration logging** - Full session tracking with JSON logs
 
-### Configuration
-| Feature | Status | Notes |
-|---------|--------|-------|
-| YAML config file | ✅ Implemented | `.wiggumizer.yml` |
-| User config | ✅ Implemented | `~/.wiggumizer.yml` |
-| Environment variables | ✅ Implemented | `ANTHROPIC_API_KEY`, etc. |
-| CLI option overrides | ✅ Implemented | CLI takes precedence |
-
-### Error Handling
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Retry with backoff | ✅ Implemented | Configurable |
-| Circuit breaker | ✅ Implemented | Auto-recovery |
-| Rate limiting | ✅ Implemented | Per-minute/hour limits |
-| File validation | ✅ Implemented | Syntax checking |
-| Rollback on error | ✅ Implemented | Automatic |
-
-### Git Integration
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Dirty repo warnings | ✅ Implemented | Before loop starts |
-| Auto-commit per iteration | ✅ Implemented | Optional |
-| Rollback support | ✅ Implemented | On validation failure |
-
----
-
-## CLI Commands
-
-### Implemented Commands
-
+### CLI Commands
 | Command | Status | Description |
 |---------|--------|-------------|
-| `wiggumize run` | ✅ Implemented | Run the Ralph loop |
+| `wiggumize run` | ✅ Implemented | Run a Ralph loop |
 | `wiggumize init` | ✅ Implemented | Initialize configuration |
 | `wiggumize logs` | ✅ Implemented | View iteration logs |
 | `wiggumize summary` | ✅ Implemented | Generate CHANGELOG |
-| `wiggumize doctor` | ✅ Implemented | Diagnose issues |
-| `wiggumize template` | 🚧 In Progress | Shows "coming soon" |
+| `wiggumize doctor` | ✅ Implemented | Diagnose installation |
+| `wiggumize template` | ⚠️ Partial | Lists templates, management coming soon |
 
-### Planned Commands
-
-| Command | Status | Description |
-|---------|--------|-------------|
-| `wiggumize multi status` | 📋 Planned | Multi-repo workspace status |
-| `wiggumize multi run` | 📋 Planned | Run across workspaces |
-| `wiggumize config` | 💡 Proposed | View/edit configuration |
-| `wiggumize validate` | 💡 Proposed | Validate prompt file |
-
----
-
-## Run Command Options
-
-### Implemented Options
-
+### Run Command Options
 | Option | Status | Description |
 |--------|--------|-------------|
-| `-p, --prompt <file>` | ✅ Implemented | Prompt file path |
-| `-P, --provider <name>` | ✅ Implemented | AI provider |
-| `-m, --max-iterations <num>` | ✅ Implemented | Max iterations |
-| `-v, --verbose` | ✅ Implemented | Verbose output |
-| `--dry-run` | ✅ Implemented | Preview changes |
+| `--prompt <file>` | ✅ Implemented | Specify prompt file |
+| `--provider <name>` | ✅ Implemented | AI provider selection |
+| `--max-iterations <num>` | ✅ Implemented | Set iteration limit |
+| `--verbose` | ✅ Implemented | Verbose output |
+| `--dry-run` | ✅ Implemented | Preview without changes |
 | `--auto-commit` | ✅ Implemented | Auto-commit each iteration |
 
-### Planned Options
+### Safety Features
+- **File validation** - Syntax checking before write (JSON, YAML, JS)
+- **Automatic rollback** - Revert on validation failure
+- **Git integration** - Dirty repo warnings, backup commits
+- **Context limits** - Configurable max file size and count
 
-| Option | Status | Description |
-|--------|--------|-------------|
-| `--watch` | 📋 Planned | Auto-restart on PROMPT.md changes |
-| `--files <glob>` | 📋 Planned | Filter files to include |
-| `--convergence-threshold <num>` | 📋 Planned | Override convergence threshold |
-| `--continue` | 📋 Planned | Resume from previous session |
-| `--quiet` | 📋 Planned | Less verbose output |
-| `--json` | 💡 Proposed | JSON output for scripts |
-| `--debug` | 💡 Proposed | Debug output |
+### Configuration
+- **Project config** - .wiggumizer.yml in project root
+- **User config** - ~/.wiggumizer.yml for global defaults
+- **Environment variables** - ANTHROPIC_API_KEY, WIGGUMIZER_PROVIDER
 
----
-
-## AI Providers
-
-| Provider | Status | Notes |
-|----------|--------|-------|
-| Claude (Anthropic) | ✅ Implemented | Default provider, Claude Opus 4.5 |
-| OpenAI (GPT-4) | 📋 Planned | Next priority |
-| Ollama (Local) | 💡 Proposed | Local model support |
-| Sourcegraph Amp | 💡 Proposed | Original Ralph tool |
+### Progress Tracking
+- **PROMPT.md task tracking** - Automatic checkbox updates based on work completed
+- **Session summaries** - CHANGELOG.md generation after runs
 
 ---
 
-## Multi-Repository Support
+## 🚧 In Progress (v0.4)
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| WorkspaceManager class | ✅ Implemented | Core functionality exists |
-| Workspace configuration | ✅ Implemented | In `.wiggumizer.yml` |
-| CLI commands (`multi`) | 📋 Planned | Needs CLI integration |
-| Cross-repo context | 🚧 In Progress | Basic support exists |
+Features currently being developed:
+
+### High Priority
+- [ ] **Fix file-selector priority bug** - .js should rank higher than .md
+- [ ] **Documentation audit** - Mark unimplemented features clearly
+- [ ] **Config tests** - Complete test coverage for config.js
+
+### Medium Priority
+- [ ] **--watch mode** - Auto-restart on PROMPT.md changes
+- [ ] **--files <glob> option** - Filter files from CLI
+- [ ] **--convergence-threshold option** - Override threshold from CLI
+- [ ] **--quiet mode** - Less verbose output
 
 ---
 
-## Template System
+## 📋 Planned (v0.5+)
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Built-in templates | ✅ Implemented | refactor, bugfix, feature, etc. |
-| Template selection on init | ✅ Implemented | `--template <name>` |
-| Template listing | ✅ Implemented | Shown during init |
-| Custom template creation | 📋 Planned | Template management commands |
-| Variable interpolation | 📋 Planned | `{{project_name}}`, etc. |
-| Template registry | 💡 Proposed | Community templates |
+### Multi-Repository Support
+The WorkspaceManager exists but needs CLI integration:
+- [ ] `wiggumize multi status` - Show workspace status
+- [ ] `wiggumize multi run` - Run across multiple repos
+- [ ] Workspace-specific configuration
+
+### Template System
+Basic templates exist, full management planned:
+- [ ] `wiggumize template list` - List available templates
+- [ ] `wiggumize template show <name>` - Display template content
+- [ ] `wiggumize template create` - Create custom templates
+- [ ] Variable interpolation: `{{project_name}}`, `{{date}}`, etc.
+
+### Provider Support
+- [x] **Claude** - Fully implemented
+- [ ] **OpenAI** - GPT-4, GPT-3.5 support
+- [ ] **Ollama** - Local model support
+- [ ] **Provider fallback** - Automatic failover
+
+### CLI Enhancements
+- [ ] `--continue` - Resume from previous session
+- [ ] `--json` - JSON output for scripting
+- [ ] `--debug` - Detailed debugging output
+- [ ] Interactive `init` - Guided configuration
+
+### Monitoring
+- [ ] Estimated time remaining
+- [ ] Token usage tracking
+- [ ] Session dashboard with stats
+
+---
+
+## 🔮 Future Ideas (Backlog)
+
+These are ideas being considered but not yet committed:
+
+- **IDE integrations** - VS Code extension, JetBrains plugin
+- **Web dashboard** - Browser-based session monitoring
+- **Team features** - Shared templates, usage analytics
+- **Custom providers** - Plugin system for AI backends
+- **Streaming output** - Real-time response display
+- **Parallel workspaces** - Run multiple repos simultaneously
 
 ---
 
 ## Documentation Status
 
-### Existing Docs
-- README.md - ✅ Accurate
-- CHANGELOG.md - ✅ Auto-generated
+### Implemented & Documented
+- [x] README.md - Project overview
+- [x] Quick start guide basics
+- [x] Configuration file format
 
-### Needs Update
-- docs/cli-reference/commands/run.md - ⚠️ Lists unimplemented options
-- docs/ai-providers/* - ⚠️ Lists unimplemented providers
+### Needs Documentation
+- [ ] `--auto-commit` flag details
+- [ ] Convergence analyzer behavior
+- [ ] PROMPT.md progress tracking
+- [ ] Rate limiting configuration
+- [ ] Error handling and retry logic
 
-### Planned Docs
-- docs/cli-reference/configuration-file.md
-- docs/troubleshooting/loop-not-converging.md
-- docs/troubleshooting/provider-errors.md
-- docs/getting-started/troubleshooting-setup.md
+### Documentation Gaps
+Some documentation was written aspirationally and describes features not yet implemented. We're actively marking these sections as "Coming Soon" or removing them.
 
 ---
 
 ## Version History
 
 ### v0.3.1 (Current)
-- ✅ Automatic PROMPT.md progress tracking
-- ✅ Enhanced convergence detection
-- ✅ Session logging and summaries
+- Added automatic PROMPT.md progress tracking
+- Improved convergence detection
+- Enhanced error handling with circuit breaker
 
-### v0.4.0 (Next)
-- 📋 Documentation accuracy improvements
-- 📋 Additional run command options
-- 📋 OpenAI provider support
+### v0.3.0
+- Multi-repository workspace support (internal)
+- Advanced convergence analyzer
+- Rate limiting and retry logic
 
-### v0.5.0 (Future)
-- 💡 Multi-repo CLI commands
-- 💡 Template management
-- 💡 Watch mode
+### v0.2.0
+- Iteration logging and session management
+- CHANGELOG generation
+- Git integration
+
+### v0.1.0
+- Initial release
+- Basic Ralph loop
+- Claude provider
 
 ---
 
 ## Contributing
 
-Want to help implement planned features? See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+Want to help? Check out:
+1. Issues labeled `good first issue`
+2. The "In Progress" section above
+3. Documentation gaps
 
-Priority areas for contribution:
-1. OpenAI provider implementation
-2. Additional run command options
-3. Template management commands
-4. Documentation improvements
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+
+---
+
+## Feedback
+
+Have ideas for the roadmap? Open an issue or discussion on GitHub!
