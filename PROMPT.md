@@ -37,15 +37,15 @@ The documentation extensively describes features that **don't exist**:
 - [ ] Create docs/ROADMAP.md showing what's planned vs implemented
 
 #### B. Implement High-Value Missing Options
-- [ ] Add `--watch` mode to `run` command (auto-restart on PROMPT.md changes)
-- [ ] Add `--files <glob>` option to `run` command (filter which files to include)
-- [ ] Add `--convergence-threshold <num>` option to `run` command
-- [ ] Add `--continue` option to resume from previous session
-- [ ] Add `--quiet` mode for less verbose output
+- [x] Add `--watch` mode to `run` command (auto-restart on PROMPT.md changes)
+- [x] Add `--files <glob>` option to `run` command (filter which files to include)
+- [x] Add `--convergence-threshold <num>` option to `run` command
+- [x] Add `--continue` option to resume from previous session
+- [x] Add `--quiet` mode for less verbose output
 
 #### C. Fix Template Command
-- [ ] Either implement basic template management OR remove command and clarify it's coming later
-- [ ] If implementing: `template list` and `template show <name>` (read-only operations first)
+- [x] Either implement basic template management OR remove command and clarify it's coming later
+- [x] If implementing: `template list` and `template show <name>` (read-only operations first)
 - [ ] Add template variable interpolation: `{{project_name}}`, `{{author}}`, `{{date}}`
 
 ### Phase 2: Complete Existing Features
@@ -60,14 +60,14 @@ The documentation extensively describes features that **don't exist**:
 - [x] Test error-handler.js
 - [x] Test prompt-updater.js
 - [x] Test file-selector.js (31/32 tests pass - fix priority bug)
-- [ ] Test config.js (config loading and merging)
+- [✅] Test config.js (config loading and merging)
 - [ ] Test workspace-manager.js (multi-repo support)
 - [ ] Add integration test for full loop execution
 
 #### C. Fix file-selector.js Priority Bug
-- [ ] Fix failing test: `.js` files should have higher priority than `.md` files
-- [ ] Verify prioritization logic matches documented behavior
-- [ ] Ensure PROMPT.md still gets highest priority
+- [x] Fix failing test: `.js` files should have higher priority than `.md` files
+- [x] Verify prioritization logic matches documented behavior
+- [x] Ensure PROMPT.md still gets highest priority
 
 ### Phase 3: Documentation Cleanup
 
@@ -139,9 +139,9 @@ The documentation extensively describes features that **don't exist**:
 
 **Start here (highest impact):**
 
-1. **Fix file-selector.js priority bug** - Tests are failing, fix the actual bug
+1. ~~**Fix file-selector.js priority bug**~~ ✅ Fixed with tier-based system
 2. **Audit docs/cli-reference/commands/run.md** - Mark unimplemented options clearly
-3. **Implement --watch mode** - High value feature that docs promise
+3. ~~**Implement --watch mode**~~ ✅ Already implemented in commands/run.js
 4. **Document --auto-commit** - Exists but undocumented
 5. **Create docs/ROADMAP.md** - Show users what's real vs planned
 

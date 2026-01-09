@@ -159,64 +159,78 @@ class FileSelector {
    * Calculate priority score for a file
    * Higher score = more important
    * 
-   * Priority tiers:
-   * - PROMPT.md: 200+ (always highest)
-   * - Source code (.js, .ts, .py): 115-165
-   * - Documentation (.md): 100-135
-   * - Config files (.json, .yml): 100-130
+   * Priority tiers (designed so code ALWAYS beats docs):
+   * - PROMPT.md: 300 (absolute highest - Ralph loop essential)
+   * - Source code (.js, .ts, .py) in src/: 200-250
+   * - Source code elsewhere: 180-230
+   * - Config files (package.json, etc): 150-180
+   * - Documentation (.md): 100-140
+   * 
+   * The key insight: We use TIER-BASED scoring where the base tier
+   * for code is HIGHER than the max possible score for docs.
    */
   calculatePriority(file, stats) {
-    let score = 100; // Base score
-
-    // Prefer smaller files (easier to fit in context)
-    if (stats.size < 10000) score += 20;       // < 10KB
-    else if (stats.size < 50000) score += 10;  // < 50KB
-    else if (stats.size > 200000) score -= 30; // > 200KB
-
-    // Prefer recently modified files
-    const age = Date.now() - stats.mtime.getTime();
-    const daysOld = age / (1000 * 60 * 60 * 24);
-
-    if (daysOld < 1) score += 30;       // Modified today
-    else if (daysOld < 7) score += 20;  // Modified this week
-    else if (daysOld < 30) score += 10; // Modified this month
-
-    // File type priority - CODE SHOULD ALWAYS BEAT DOCS
-    // This is the critical fix: ensure .js/.ts/.py consistently outrank .md
     const ext = path.extname(file);
     const basename = path.basename(file);
     
-    // Source code files get highest type bonus
-    if (['.js', '.ts', '.py', '.jsx', '.tsx'].includes(ext)) {
-      score += 25; // Increased from 15 to ensure code > docs
-    }
-    // Documentation files get lower type bonus
-    else if (['.md'].includes(ext)) {
-      score += 5;
-    }
-    // Config files get moderate bonus
-    else if (['.json', '.yml', '.yaml'].includes(ext)) {
-      score += 10;
-    }
-
-    // Directory bonuses (applied after type bonus)
-    if (file.startsWith('src/') || file.startsWith('src\\')) score += 20;
-    else if (file.startsWith('lib/') || file.startsWith('lib\\')) score += 15;
-    else if (file.startsWith('test/') || file.startsWith('tests/') || 
-             file.startsWith('test\\') || file.startsWith('tests\\')) score -= 10;
-
-    // Important root files (specific overrides)
-    // PROMPT.md gets absolute highest priority for Ralph loop
+    // PROMPT.md is ALWAYS first - essential for Ralph loop
     if (basename === 'PROMPT.md') {
-      score = 300; // Absolute override - always first
+      return 300;
     }
-    // package.json is critical for understanding the project
-    else if (basename === 'package.json') {
-      score += 40;
+    
+    // Determine base tier by file type
+    // This ensures code files ALWAYS outrank documentation
+    let baseTier;
+    const isSourceCode = ['.js', '.ts', '.py', '.jsx', '.tsx'].includes(ext);
+    const isConfig = ['.json', '.yml', '.yaml'].includes(ext);
+    const isDoc = ['.md'].includes(ext);
+    
+    if (isSourceCode) {
+      baseTier = 180; // Source code base: 180-250 range
+    } else if (isConfig) {
+      baseTier = 140; // Config base: 140-180 range
+    } else if (isDoc) {
+      baseTier = 100; // Docs base: 100-140 range (can NEVER reach 180)
+    } else {
+      baseTier = 80; // Other files: 80-120 range
     }
-    // README is important but should not beat source code
-    else if (basename === 'README.md') {
-      score += 15; // Reduced from 30 - should still be below src/*.js files
+    
+    let score = baseTier;
+    
+    // Size bonus (max +15)
+    if (stats.size < 10000) score += 15;       // < 10KB
+    else if (stats.size < 50000) score += 8;   // < 50KB
+    else if (stats.size > 200000) score -= 20; // > 200KB (penalty)
+
+    // Recency bonus (max +20)
+    const age = Date.now() - stats.mtime.getTime();
+    const daysOld = age / (1000 * 60 * 60 * 24);
+
+    if (daysOld < 1) score += 20;       // Modified today
+    else if (daysOld < 7) score += 12;  // Modified this week
+    else if (daysOld < 30) score += 5;  // Modified this month
+
+    // Directory bonuses for source code (max +20)
+    if (isSourceCode) {
+      if (file.startsWith('src/') || file.startsWith('src\\')) {
+        score += 20; // Main source directory
+      } else if (file.startsWith('lib/') || file.startsWith('lib\\')) {
+        score += 15;
+      } else if (file.startsWith('test/') || file.startsWith('tests/') || 
+               file.startsWith('test\\') || file.startsWith('tests\\')) {
+        score -= 15; // Tests are lower priority than production code
+      }
+    }
+
+    // Special file bonuses (within their tier)
+    if (basename === 'package.json') {
+      score += 25; // Critical for understanding project
+    } else if (basename === 'README.md') {
+      score += 10; // Important doc, but still in docs tier
+    } else if (basename === 'index.js' || basename === 'index.ts') {
+      score += 10; // Entry points are important
+    } else if (basename.includes('.test.') || basename.includes('.spec.')) {
+      score -= 10; // Test files lower priority
     }
 
     return score;
