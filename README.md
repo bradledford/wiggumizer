@@ -72,6 +72,53 @@ Unlike other tools that "tell" the AI what was done, Wiggumizer implements the p
 
 This creates true iterative learning where each iteration builds meaningfully on the last.
 
+## Usage Patterns
+
+Wiggumizer supports different workflows depending on your needs:
+
+### Quick Fix (5-20 minutes)
+```bash
+echo "Add error handling to getUserData()" > PROMPT.md
+wiggumize run --max-iterations 10
+# Review, test, commit - done!
+```
+
+### Feature Development (1-3 hours, single session)
+```bash
+# PROMPT.md: "Implement dark mode with theme switcher and persistence"
+wiggumize run --max-iterations 30
+# Let it converge, review comprehensive changes
+```
+
+### Project Evolution (Days/weeks, multiple sessions)
+```bash
+# Day 1: Initial work
+echo "Phase 1: Refactor authentication to use JWT" > PROMPT.md
+wiggumize run
+git commit -am "Phase 1: JWT authentication complete"
+
+# Day 3: Next phase (MANUALLY UPDATE PROMPT.md)
+vim PROMPT.md  # Change to "Phase 2: Add OAuth providers"
+wiggumize run
+```
+
+**Key Principle**: Between sessions, manually update `PROMPT.md` to give the AI new direction. The AI discovers its previous work through git history and `.ralph-notes.md`, but you control the goal.
+
+### What Updates Automatically vs. Manually
+
+**Automatic** (Wiggumizer manages):
+- ✅ Task checkboxes in PROMPT.md (`- [ ]` → `- [✅]`)
+- ✅ `.ralph-notes.md` (AI leaves notes for next iteration)
+- ✅ `CHANGELOG.md` (summary of changes)
+- ✅ `.wiggumizer/iterations/` logs
+
+**Manual** (You control):
+- ✋ Core PROMPT.md instructions and goals
+- ✋ Deciding what to work on next
+- ✋ When to run again vs. commit and stop
+
+This keeps you in the driver's seat while letting the AI iterate within your defined boundaries.
+
 ## Philosophy
 
 Wiggumizer embraces **"deterministic imperfection"** - the idea that code quality emerges through iteration rather than upfront perfection.

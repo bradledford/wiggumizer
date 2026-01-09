@@ -2,6 +2,10 @@
 
 Practical guides, tutorials, and examples for mastering Wiggumizer.
 
+## Essential Reading
+
+- **[Cross-Session Workflows](cross-session-workflows.md)** - How to use Wiggumizer across multiple sessions (days/weeks apart) ✓ **Start here for multi-session work**
+
 ## Best Practices
 
 Learn how to use Wiggumizer effectively:
@@ -38,10 +42,11 @@ Real-world examples with full code:
 
 Common workflow patterns:
 
-- **[Daily Development](workflows/daily-development.md)** - Day-to-day Ralph usage
-- **[Code Review Prep](workflows/code-review-prep.md)** - Preparing for review
-- **[Onboarding](workflows/onboarding.md)** - Learning new codebases
-- **[Maintenance](workflows/maintenance.md)** - Cleanup and maintenance
+- **[Cross-Session Workflows](cross-session-workflows.md)** - Multi-day/week projects ✓ Available
+- **[Daily Development](workflows/daily-development.md)** - Day-to-day Ralph usage (Coming Soon)
+- **[Code Review Prep](workflows/code-review-prep.md)** - Preparing for review (Coming Soon)
+- **[Onboarding](workflows/onboarding.md)** - Learning new codebases (Coming Soon)
+- **[Maintenance](workflows/maintenance.md)** - Cleanup and maintenance (Coming Soon)
 
 ## Quick Tips
 

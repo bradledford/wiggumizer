@@ -158,6 +158,12 @@ class FileSelector {
   /**
    * Calculate priority score for a file
    * Higher score = more important
+   * 
+   * Priority tiers:
+   * - PROMPT.md: 200+ (always highest)
+   * - Source code (.js, .ts, .py): 115-165
+   * - Documentation (.md): 100-135
+   * - Config files (.json, .yml): 100-130
    */
   calculatePriority(file, stats) {
     let score = 100; // Base score
@@ -175,21 +181,43 @@ class FileSelector {
     else if (daysOld < 7) score += 20;  // Modified this week
     else if (daysOld < 30) score += 10; // Modified this month
 
-    // Prefer important file types
+    // File type priority - CODE SHOULD ALWAYS BEAT DOCS
+    // This is the critical fix: ensure .js/.ts/.py consistently outrank .md
     const ext = path.extname(file);
-    if (['.js', '.ts', '.py'].includes(ext)) score += 15;
-    if (['.md'].includes(ext)) score += 5;
-    if (['.json', '.yml', '.yaml'].includes(ext)) score += 3;
+    const basename = path.basename(file);
+    
+    // Source code files get highest type bonus
+    if (['.js', '.ts', '.py', '.jsx', '.tsx'].includes(ext)) {
+      score += 25; // Increased from 15 to ensure code > docs
+    }
+    // Documentation files get lower type bonus
+    else if (['.md'].includes(ext)) {
+      score += 5;
+    }
+    // Config files get moderate bonus
+    else if (['.json', '.yml', '.yaml'].includes(ext)) {
+      score += 10;
+    }
 
-    // Prefer files in certain directories
-    if (file.startsWith('src/')) score += 20;
-    if (file.startsWith('lib/')) score += 15;
-    if (file.startsWith('test/') || file.startsWith('tests/')) score -= 10;
+    // Directory bonuses (applied after type bonus)
+    if (file.startsWith('src/') || file.startsWith('src\\')) score += 20;
+    else if (file.startsWith('lib/') || file.startsWith('lib\\')) score += 15;
+    else if (file.startsWith('test/') || file.startsWith('tests/') || 
+             file.startsWith('test\\') || file.startsWith('tests\\')) score -= 10;
 
-    // Important root files
-    if (file === 'package.json') score += 50;
-    if (file === 'README.md') score += 30;
-    if (file === 'PROMPT.md') score += 100; // Very important for Ralph loop!
+    // Important root files (specific overrides)
+    // PROMPT.md gets absolute highest priority for Ralph loop
+    if (basename === 'PROMPT.md') {
+      score = 300; // Absolute override - always first
+    }
+    // package.json is critical for understanding the project
+    else if (basename === 'package.json') {
+      score += 40;
+    }
+    // README is important but should not beat source code
+    else if (basename === 'README.md') {
+      score += 15; // Reduced from 30 - should still be below src/*.js files
+    }
 
     return score;
   }
@@ -266,7 +294,7 @@ class FileSelector {
     return {
       fileCount: files.length,
       totalSize,
-      averageSize: Math.round(totalSize / files.length)
+      averageSize: files.length > 0 ? Math.round(totalSize / files.length) : 0
     };
   }
 }

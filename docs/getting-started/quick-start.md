@@ -139,11 +139,12 @@ wiggumize run --watch
 
 Now that you've run your first Ralph loop, explore:
 
-1. **[First Project Tutorial](first-project.md)** - Complete end-to-end example
-2. **[Ralph Philosophy](../core-concepts/ralph-philosophy.md)** - Understand the "why"
-3. **[Writing Effective Prompts](../guides/best-practices/writing-effective-prompts.md)** - Craft better prompts
-4. **[Prompt Templates](../prompt-templates/README.md)** - Use pre-made templates
-5. **[Loop Not Converging?](../troubleshooting/loop-not-converging.md)** - Troubleshooting tips
+1. **[Cross-Session Workflows](../guides/cross-session-workflows.md)** - Working across multiple sessions ⭐ **Essential for ongoing work**
+2. **[First Project Tutorial](first-project.md)** - Complete end-to-end example
+3. **[Ralph Philosophy](../core-concepts/ralph-philosophy.md)** - Understand the "why"
+4. **[Writing Effective Prompts](../guides/best-practices/writing-effective-prompts.md)** - Craft better prompts
+5. **[Prompt Templates](../prompt-templates/README.md)** - Use pre-made templates
+6. **[Loop Not Converging?](../troubleshooting/loop-not-converging.md)** - Troubleshooting tips
 
 ## Real Example
 

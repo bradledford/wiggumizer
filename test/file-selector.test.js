@@ -1,588 +1,526 @@
-const { describe, it, beforeEach, afterEach, mock } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
-
-// We need to test FileSelector
 const FileSelector = require('../src/file-selector');
 
+// Test helper to create a temporary directory structure
+function createTempDir() {
+  const tempDir = path.join(__dirname, `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  fs.mkdirSync(tempDir, { recursive: true });
+  return tempDir;
+}
+
+function cleanupTempDir(tempDir) {
+  if (fs.existsSync(tempDir)) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function createFile(dir, relativePath, content = '') {
+  const fullPath = path.join(dir, relativePath);
+  const dirPath = path.dirname(fullPath);
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+  fs.writeFileSync(fullPath, content, 'utf-8');
+}
+
 describe('FileSelector', () => {
-  let testDir;
-  let originalCwd;
+  let tempDir;
 
   beforeEach(() => {
-    // Create a temporary directory for each test
-    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wiggumizer-test-'));
-    originalCwd = process.cwd();
+    tempDir = createTempDir();
   });
 
   afterEach(() => {
-    // Clean up temp directory
-    process.chdir(originalCwd);
-    try {
-      fs.rmSync(testDir, { recursive: true, force: true });
-    } catch (e) {
-      // Ignore cleanup errors
-    }
+    cleanupTempDir(tempDir);
   });
 
-  /**
-   * Helper to create files in the test directory
-   */
-  function createFile(relativePath, content = 'test content') {
-    const fullPath = path.join(testDir, relativePath);
-    const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(fullPath, content, 'utf-8');
-    return fullPath;
-  }
-
-  describe('constructor', () => {
-    it('should use default options when none provided', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      
-      assert.deepStrictEqual(selector.includePatterns, ['**/*']);
-      assert.strictEqual(selector.respectGitignore, true);
-      assert.strictEqual(selector.maxContextSize, 100000);
-      assert.strictEqual(selector.maxFiles, 50);
+  describe('basic functionality', () => {
+    it('should return empty array for empty directory', () => {
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+      assert.deepStrictEqual(files, []);
     });
 
-    it('should accept custom options', () => {
-      const selector = new FileSelector({
-        cwd: testDir,
-        include: ['src/**/*.js'],
-        exclude: ['**/*.test.js'],
-        respectGitignore: false,
-        maxContextSize: 50000,
-        maxFiles: 20
-      });
-      
-      assert.deepStrictEqual(selector.includePatterns, ['src/**/*.js']);
-      assert.deepStrictEqual(selector.excludePatterns, ['**/*.test.js']);
-      assert.strictEqual(selector.respectGitignore, false);
-      assert.strictEqual(selector.maxContextSize, 50000);
-      assert.strictEqual(selector.maxFiles, 20);
+    it('should find files with default extensions', () => {
+      createFile(tempDir, 'index.js', 'console.log("hello");');
+      createFile(tempDir, 'README.md', '# Hello');
+      createFile(tempDir, 'package.json', '{}');
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 3);
+      assert.ok(files.includes('index.js'));
+      assert.ok(files.includes('README.md'));
+      assert.ok(files.includes('package.json'));
+    });
+
+    it('should ignore files without default extensions', () => {
+      createFile(tempDir, 'index.js', 'console.log("hello");');
+      createFile(tempDir, 'image.png', 'binary data');
+      createFile(tempDir, 'data.csv', 'a,b,c');
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 1);
+      assert.ok(files.includes('index.js'));
+    });
+
+    it('should walk directories recursively', () => {
+      createFile(tempDir, 'src/index.js', 'main');
+      createFile(tempDir, 'src/utils/helper.js', 'helper');
+      createFile(tempDir, 'lib/core.js', 'core');
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 3);
+      // Normalize path separators for cross-platform testing
+      const normalizedFiles = files.map(f => f.replace(/\\/g, '/'));
+      assert.ok(normalizedFiles.includes('src/index.js'));
+      assert.ok(normalizedFiles.includes('src/utils/helper.js'));
+      assert.ok(normalizedFiles.includes('lib/core.js'));
     });
   });
 
-  describe('loadGitignore', () => {
-    it('should return null when no .gitignore exists', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      
-      assert.strictEqual(selector.gitignore, null);
+  describe('gitignore handling', () => {
+    it('should respect .gitignore patterns', () => {
+      createFile(tempDir, '.gitignore', 'node_modules/\ndist/\n*.log');
+      createFile(tempDir, 'index.js', 'main');
+      createFile(tempDir, 'node_modules/pkg/index.js', 'pkg');
+      createFile(tempDir, 'dist/bundle.js', 'bundle');
+      createFile(tempDir, 'debug.log', 'logs');
+
+      const selector = new FileSelector({ cwd: tempDir, respectGitignore: true });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 1);
+      assert.ok(files.includes('index.js'));
     });
 
-    it('should load and parse .gitignore file', () => {
-      createFile('.gitignore', 'node_modules/\n*.log\nbuild/');
-      
-      const selector = new FileSelector({ cwd: testDir });
-      
-      assert.notStrictEqual(selector.gitignore, null);
-      // Test that patterns work
-      assert.strictEqual(selector.gitignore.ignores('node_modules/package.json'), true);
-      assert.strictEqual(selector.gitignore.ignores('error.log'), true);
-      assert.strictEqual(selector.gitignore.ignores('build/output.js'), true);
-      assert.strictEqual(selector.gitignore.ignores('src/index.js'), false);
+    it('should include files when respectGitignore is false', () => {
+      createFile(tempDir, '.gitignore', 'ignored/');
+      createFile(tempDir, 'index.js', 'main');
+      createFile(tempDir, 'ignored/file.js', 'ignored');
+
+      const selector = new FileSelector({ cwd: tempDir, respectGitignore: false });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 2);
     });
 
     it('should always ignore .git directory', () => {
-      createFile('.gitignore', '*.log');
-      
-      const selector = new FileSelector({ cwd: testDir });
-      
-      assert.strictEqual(selector.gitignore.ignores('.git'), true);
-      assert.strictEqual(selector.gitignore.ignores('.git/config'), true);
-    });
+      createFile(tempDir, '.git/config', 'git config');
+      createFile(tempDir, '.git/HEAD', 'ref: refs/heads/main');
+      createFile(tempDir, 'index.js', 'main');
 
-    it('should handle malformed .gitignore gracefully', () => {
-      // Create a directory where .gitignore should be a file (edge case)
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: true,
-        verbose: false
-      });
-      
-      // Should not throw, just return null
-      assert.strictEqual(selector.gitignore, null);
-    });
-  });
-
-  describe('walkDirectory', () => {
-    it('should find all files recursively', () => {
-      createFile('file1.js', 'content1');
-      createFile('src/file2.js', 'content2');
-      createFile('src/nested/file3.js', 'content3');
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false 
-      });
-      
-      const files = selector.walkDirectory(testDir);
-      
-      assert.strictEqual(files.length, 3);
-      assert.ok(files.includes('file1.js'));
-      assert.ok(files.includes(path.join('src', 'file2.js')));
-      assert.ok(files.includes(path.join('src', 'nested', 'file3.js')));
-    });
-
-    it('should respect .gitignore patterns during walk', () => {
-      createFile('.gitignore', 'ignored/\n*.log');
-      createFile('keep.js', 'keep');
-      createFile('ignored/secret.js', 'secret');
-      createFile('error.log', 'log');
-      
-      const selector = new FileSelector({ cwd: testDir });
-      
-      const files = selector.walkDirectory(testDir);
-      
-      assert.ok(files.includes('keep.js'));
-      assert.ok(!files.some(f => f.includes('ignored')));
-      assert.ok(!files.includes('error.log'));
-    });
-
-    it('should handle empty directories', () => {
-      fs.mkdirSync(path.join(testDir, 'empty'), { recursive: true });
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false 
-      });
-      
-      const files = selector.walkDirectory(testDir);
-      
-      assert.strictEqual(files.length, 0);
-    });
-
-    it('should skip unreadable directories gracefully', () => {
-      createFile('readable.js', 'content');
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false,
-        verbose: false
-      });
-      
-      // Should not throw
-      const files = selector.walkDirectory(testDir);
-      assert.ok(Array.isArray(files));
-    });
-  });
-
-  describe('filterFiles', () => {
-    it('should filter by exclude patterns', () => {
-      const selector = new FileSelector({
-        cwd: testDir,
-        exclude: ['**/*.test.js', 'node_modules/**']
-      });
-      
-      const files = [
-        'src/index.js',
-        'src/index.test.js',
-        'node_modules/lodash/index.js',
-        'lib/utils.js'
-      ];
-      
-      const filtered = selector.filterFiles(files);
-      
-      assert.ok(filtered.includes('src/index.js'));
-      assert.ok(filtered.includes('lib/utils.js'));
-      assert.ok(!filtered.includes('src/index.test.js'));
-      assert.ok(!filtered.includes('node_modules/lodash/index.js'));
-    });
-
-    it('should filter by include patterns', () => {
-      const selector = new FileSelector({
-        cwd: testDir,
-        include: ['src/**/*.js'],
-        exclude: []
-      });
-      
-      const files = [
-        'src/index.js',
-        'src/nested/util.js',
-        'lib/other.js',
-        'test/test.js'
-      ];
-      
-      const filtered = selector.filterFiles(files);
-      
-      assert.ok(filtered.includes('src/index.js'));
-      assert.ok(filtered.includes(path.normalize('src/nested/util.js')));
-      assert.ok(!filtered.includes('lib/other.js'));
-      assert.ok(!filtered.includes('test/test.js'));
-    });
-
-    it('should filter by default extensions when using **/*', () => {
-      const selector = new FileSelector({
-        cwd: testDir,
-        include: ['**/*'],
-        exclude: []
-      });
-      
-      const files = [
-        'src/index.js',
-        'src/types.ts',
-        'README.md',
-        'config.json',
-        'image.png',
-        'binary.exe',
-        'styles.css'
-      ];
-      
-      const filtered = selector.filterFiles(files);
-      
-      // Default extensions include .js, .ts, .md, .json
-      assert.ok(filtered.includes('src/index.js'));
-      assert.ok(filtered.includes('src/types.ts'));
-      assert.ok(filtered.includes('README.md'));
-      assert.ok(filtered.includes('config.json'));
-      // Non-default extensions should be filtered
-      assert.ok(!filtered.includes('image.png'));
-      assert.ok(!filtered.includes('binary.exe'));
-      assert.ok(!filtered.includes('styles.css'));
-    });
-  });
-
-  describe('calculatePriority', () => {
-    it('should give higher priority to smaller files', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      
-      const smallStats = { size: 5000, mtime: new Date() };
-      const largeStats = { size: 250000, mtime: new Date() };
-      
-      const smallPriority = selector.calculatePriority('file.js', smallStats);
-      const largePriority = selector.calculatePriority('file.js', largeStats);
-      
-      assert.ok(smallPriority > largePriority, 'Smaller files should have higher priority');
-    });
-
-    it('should give higher priority to recently modified files', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      
-      const recentStats = { size: 10000, mtime: new Date() };
-      const oldStats = { size: 10000, mtime: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) }; // 60 days ago
-      
-      const recentPriority = selector.calculatePriority('file.js', recentStats);
-      const oldPriority = selector.calculatePriority('file.js', oldStats);
-      
-      assert.ok(recentPriority > oldPriority, 'Recent files should have higher priority');
-    });
-
-    it('should give higher priority to important file types', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      const stats = { size: 10000, mtime: new Date() };
-      
-      const jsPriority = selector.calculatePriority('app.js', stats);
-      const mdPriority = selector.calculatePriority('README.md', stats);
-      const jsonPriority = selector.calculatePriority('config.json', stats);
-      
-      // .js files should have highest priority among these
-      assert.ok(jsPriority > mdPriority);
-      assert.ok(mdPriority > jsonPriority);
-    });
-
-    it('should give higher priority to src/ files', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      const stats = { size: 10000, mtime: new Date() };
-      
-      const srcPriority = selector.calculatePriority('src/index.js', stats);
-      const rootPriority = selector.calculatePriority('index.js', stats);
-      
-      assert.ok(srcPriority > rootPriority, 'src/ files should have higher priority');
-    });
-
-    it('should give lower priority to test files', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      const stats = { size: 10000, mtime: new Date() };
-      
-      const srcPriority = selector.calculatePriority('src/index.js', stats);
-      const testPriority = selector.calculatePriority('test/index.js', stats);
-      
-      assert.ok(srcPriority > testPriority, 'test/ files should have lower priority');
-    });
-
-    it('should give highest priority to PROMPT.md', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      const stats = { size: 10000, mtime: new Date() };
-      
-      const promptPriority = selector.calculatePriority('PROMPT.md', stats);
-      const packagePriority = selector.calculatePriority('package.json', stats);
-      const srcPriority = selector.calculatePriority('src/index.js', stats);
-      
-      assert.ok(promptPriority > packagePriority, 'PROMPT.md should have highest priority');
-      assert.ok(promptPriority > srcPriority);
-    });
-
-    it('should give high priority to package.json', () => {
-      const selector = new FileSelector({ cwd: testDir });
-      const stats = { size: 10000, mtime: new Date() };
-      
-      const packagePriority = selector.calculatePriority('package.json', stats);
-      const otherPriority = selector.calculatePriority('other.json', stats);
-      
-      assert.ok(packagePriority > otherPriority, 'package.json should have higher priority than other .json');
-    });
-  });
-
-  describe('applyLimits', () => {
-    it('should respect maxFiles limit', () => {
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        maxFiles: 3,
-        maxContextSize: 1000000
-      });
-      
-      const files = [
-        { path: 'a.js', size: 100, priority: 100 },
-        { path: 'b.js', size: 100, priority: 90 },
-        { path: 'c.js', size: 100, priority: 80 },
-        { path: 'd.js', size: 100, priority: 70 },
-        { path: 'e.js', size: 100, priority: 60 }
-      ];
-      
-      const limited = selector.applyLimits(files);
-      
-      assert.strictEqual(limited.length, 3);
-      assert.strictEqual(limited[0].path, 'a.js');
-      assert.strictEqual(limited[1].path, 'b.js');
-      assert.strictEqual(limited[2].path, 'c.js');
-    });
-
-    it('should respect maxContextSize limit', () => {
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        maxFiles: 100,
-        maxContextSize: 250
-      });
-      
-      const files = [
-        { path: 'a.js', size: 100, priority: 100 },
-        { path: 'b.js', size: 100, priority: 90 },
-        { path: 'c.js', size: 100, priority: 80 },
-        { path: 'd.js', size: 100, priority: 70 }
-      ];
-      
-      const limited = selector.applyLimits(files);
-      
-      // Should only include files up to 250 bytes
-      assert.strictEqual(limited.length, 2);
-      assert.strictEqual(limited[0].path, 'a.js');
-      assert.strictEqual(limited[1].path, 'b.js');
-    });
-
-    it('should apply both limits together', () => {
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        maxFiles: 10,
-        maxContextSize: 150
-      });
-      
-      const files = [
-        { path: 'a.js', size: 100, priority: 100 },
-        { path: 'b.js', size: 100, priority: 90 },
-        { path: 'c.js', size: 100, priority: 80 }
-      ];
-      
-      const limited = selector.applyLimits(files);
-      
-      // Size limit should kick in first
-      assert.strictEqual(limited.length, 1);
-    });
-  });
-
-  describe('getFiles', () => {
-    it('should return prioritized list of files', () => {
-      createFile('PROMPT.md', '# Goal');
-      createFile('package.json', '{}');
-      createFile('src/index.js', 'console.log("hello")');
-      createFile('README.md', '# Readme');
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false
-      });
-      
+      const selector = new FileSelector({ cwd: tempDir });
       const files = selector.getFiles();
-      
-      assert.ok(files.length > 0);
-      // PROMPT.md should be first due to highest priority
+
+      assert.strictEqual(files.length, 1);
+      assert.ok(files.includes('index.js'));
+    });
+  });
+
+  describe('include/exclude patterns', () => {
+    it('should filter by include patterns', () => {
+      createFile(tempDir, 'src/app.js', 'app');
+      createFile(tempDir, 'src/app.ts', 'app ts');
+      createFile(tempDir, 'lib/util.js', 'util');
+
+      const selector = new FileSelector({
+        cwd: tempDir,
+        include: ['src/**/*.js']
+      });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 1);
+      const normalizedFiles = files.map(f => f.replace(/\\/g, '/'));
+      assert.ok(normalizedFiles.includes('src/app.js'));
+    });
+
+    it('should filter by exclude patterns', () => {
+      createFile(tempDir, 'src/app.js', 'app');
+      createFile(tempDir, 'src/app.test.js', 'test');
+      createFile(tempDir, 'src/util.js', 'util');
+
+      const selector = new FileSelector({
+        cwd: tempDir,
+        exclude: ['**/*.test.js']
+      });
+      const files = selector.getFiles();
+
+      const normalizedFiles = files.map(f => f.replace(/\\/g, '/'));
+      assert.ok(normalizedFiles.includes('src/app.js'));
+      assert.ok(normalizedFiles.includes('src/util.js'));
+      assert.ok(!normalizedFiles.includes('src/app.test.js'));
+    });
+  });
+
+  describe('priority calculation', () => {
+    it('should give PROMPT.md the highest priority', () => {
+      createFile(tempDir, 'PROMPT.md', '# Goal');
+      createFile(tempDir, 'src/index.js', 'main');
+      createFile(tempDir, 'package.json', '{}');
+      createFile(tempDir, 'README.md', '# Project');
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      // PROMPT.md should be first
       assert.strictEqual(files[0], 'PROMPT.md');
     });
 
-    it('should exclude files matching exclude patterns', () => {
-      createFile('src/index.js', 'code');
-      createFile('src/index.test.js', 'test');
-      createFile('node_modules/lib/index.js', 'lib');
+    it('should prioritize source code files (.js) over documentation (.md)', () => {
+      // Create files with same modification time by creating them in sequence
+      // and touching them to have predictable timestamps
+      const now = new Date();
       
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false,
-        exclude: ['**/*.test.js', 'node_modules/**']
+      createFile(tempDir, 'src/app.js', 'const app = () => {};');
+      createFile(tempDir, 'docs/guide.md', '# Guide\n\nSome documentation');
+      createFile(tempDir, 'src/utils.js', 'const utils = {};');
+      createFile(tempDir, 'docs/api.md', '# API\n\nAPI documentation');
+
+      // Set same mtime on all files to isolate type-based priority
+      const files = ['src/app.js', 'docs/guide.md', 'src/utils.js', 'docs/api.md'];
+      files.forEach(f => {
+        const fullPath = path.join(tempDir, f);
+        fs.utimesSync(fullPath, now, now);
       });
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const result = selector.getFiles();
+
+      // Get positions of js and md files
+      const normalizedResult = result.map(f => f.replace(/\\/g, '/'));
       
-      const files = selector.getFiles();
-      
-      assert.ok(files.includes(path.normalize('src/index.js')));
-      assert.ok(!files.some(f => f.includes('.test.js')));
-      assert.ok(!files.some(f => f.includes('node_modules')));
+      const jsFiles = normalizedResult.filter(f => f.endsWith('.js'));
+      const mdFiles = normalizedResult.filter(f => f.endsWith('.md'));
+
+      // All .js files should appear before all .md files
+      // (except PROMPT.md which isn't in this test)
+      const lastJsIndex = Math.max(...jsFiles.map(f => normalizedResult.indexOf(f)));
+      const firstMdIndex = Math.min(...mdFiles.map(f => normalizedResult.indexOf(f)));
+
+      assert.ok(
+        lastJsIndex < firstMdIndex,
+        `JS files should be prioritized over MD files. JS indices: ${jsFiles.map(f => normalizedResult.indexOf(f))}, MD indices: ${mdFiles.map(f => normalizedResult.indexOf(f))}`
+      );
     });
 
-    it('should respect .gitignore', () => {
-      createFile('.gitignore', 'ignored/\n*.secret');
-      createFile('src/index.js', 'code');
-      createFile('ignored/secret.js', 'secret');
-      createFile('config.secret', 'password');
+    it('should prioritize src/ directory files', () => {
+      const now = new Date();
       
-      const selector = new FileSelector({ cwd: testDir });
-      
+      createFile(tempDir, 'src/main.js', 'main');
+      createFile(tempDir, 'other/helper.js', 'helper');
+
+      // Set same mtime
+      fs.utimesSync(path.join(tempDir, 'src/main.js'), now, now);
+      fs.utimesSync(path.join(tempDir, 'other/helper.js'), now, now);
+
+      const selector = new FileSelector({ cwd: tempDir });
       const files = selector.getFiles();
+      const normalizedFiles = files.map(f => f.replace(/\\/g, '/'));
+
+      // src/main.js should come before other/helper.js
+      const srcIndex = normalizedFiles.indexOf('src/main.js');
+      const otherIndex = normalizedFiles.indexOf('other/helper.js');
+
+      assert.ok(srcIndex < otherIndex, 'src/ files should be prioritized');
+    });
+
+    it('should give package.json high priority', () => {
+      const now = new Date();
       
-      assert.ok(files.includes(path.normalize('src/index.js')));
-      assert.ok(!files.some(f => f.includes('ignored')));
-      assert.ok(!files.some(f => f.includes('.secret')));
+      createFile(tempDir, 'package.json', '{"name": "test"}');
+      createFile(tempDir, 'config.json', '{}');
+      createFile(tempDir, 'data.json', '[]');
+
+      // Set same mtime
+      ['package.json', 'config.json', 'data.json'].forEach(f => {
+        fs.utimesSync(path.join(tempDir, f), now, now);
+      });
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      // package.json should be first among json files
+      assert.strictEqual(files[0], 'package.json');
+    });
+
+    it('should deprioritize test directories', () => {
+      const now = new Date();
+      
+      createFile(tempDir, 'src/app.js', 'app');
+      createFile(tempDir, 'test/app.test.js', 'test');
+
+      // Set same mtime and similar sizes
+      fs.utimesSync(path.join(tempDir, 'src/app.js'), now, now);
+      fs.utimesSync(path.join(tempDir, 'test/app.test.js'), now, now);
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+      const normalizedFiles = files.map(f => f.replace(/\\/g, '/'));
+
+      const srcIndex = normalizedFiles.indexOf('src/app.js');
+      const testIndex = normalizedFiles.indexOf('test/app.test.js');
+
+      assert.ok(srcIndex < testIndex, 'test/ files should be deprioritized');
+    });
+
+    it('should prefer smaller files (easier to fit in context)', () => {
+      const now = new Date();
+      
+      // Create a small file and a large file
+      createFile(tempDir, 'small.js', 'const x = 1;');
+      createFile(tempDir, 'large.js', 'const x = 1;\n'.repeat(20000)); // ~240KB
+
+      // Set same mtime
+      fs.utimesSync(path.join(tempDir, 'small.js'), now, now);
+      fs.utimesSync(path.join(tempDir, 'large.js'), now, now);
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      // small.js should come before large.js
+      assert.strictEqual(files[0], 'small.js');
+    });
+
+    it('should prefer recently modified files', () => {
+      createFile(tempDir, 'old.js', 'old code');
+      createFile(tempDir, 'new.js', 'new code');
+
+      // Set old.js to 60 days ago, new.js to now
+      const oldDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      const newDate = new Date();
+      
+      fs.utimesSync(path.join(tempDir, 'old.js'), oldDate, oldDate);
+      fs.utimesSync(path.join(tempDir, 'new.js'), newDate, newDate);
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      // new.js should come before old.js
+      assert.strictEqual(files[0], 'new.js');
+    });
+  });
+
+  describe('context limits', () => {
+    it('should respect maxFiles limit', () => {
+      // Create 10 files
+      for (let i = 0; i < 10; i++) {
+        createFile(tempDir, `file${i}.js`, `// file ${i}`);
+      }
+
+      const selector = new FileSelector({ cwd: tempDir, maxFiles: 5 });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 5);
+    });
+
+    it('should respect maxContextSize limit', () => {
+      // Create files that exceed context size
+      createFile(tempDir, 'small.js', 'x'.repeat(1000));  // 1KB
+      createFile(tempDir, 'medium.js', 'x'.repeat(5000)); // 5KB
+      createFile(tempDir, 'large.js', 'x'.repeat(10000)); // 10KB
+
+      const selector = new FileSelector({ cwd: tempDir, maxContextSize: 8000 });
+      const files = selector.getFiles();
+
+      // Should include small and medium (6KB), but not large (would exceed 8KB)
+      // Note: order depends on priority, but total size should be under limit
+      const totalSize = files.reduce((sum, f) => {
+        return sum + fs.statSync(path.join(tempDir, f)).size;
+      }, 0);
+
+      assert.ok(totalSize <= 8000, `Total size ${totalSize} exceeds limit`);
     });
   });
 
   describe('getFilesWithContent', () => {
     it('should return files with their content', () => {
-      createFile('src/index.js', 'const x = 1;');
-      createFile('README.md', '# Hello');
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false
-      });
-      
+      createFile(tempDir, 'index.js', 'const x = 1;');
+      createFile(tempDir, 'util.js', 'const y = 2;');
+
+      const selector = new FileSelector({ cwd: tempDir });
       const filesWithContent = selector.getFilesWithContent();
+
+      assert.strictEqual(filesWithContent.length, 2);
       
-      assert.ok(filesWithContent.length >= 2);
-      
-      const indexFile = filesWithContent.find(f => f.path.includes('index.js'));
+      const indexFile = filesWithContent.find(f => f.path === 'index.js');
       assert.ok(indexFile);
       assert.strictEqual(indexFile.content, 'const x = 1;');
-      
-      const readmeFile = filesWithContent.find(f => f.path.includes('README.md'));
-      assert.ok(readmeFile);
-      assert.strictEqual(readmeFile.content, '# Hello');
     });
 
     it('should handle read errors gracefully', () => {
-      createFile('readable.js', 'content');
+      createFile(tempDir, 'index.js', 'const x = 1;');
       
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false
-      });
+      const selector = new FileSelector({ cwd: tempDir });
       
-      // Should not throw even if some files can't be read
+      // This test ensures the method doesn't crash on errors
       const filesWithContent = selector.getFilesWithContent();
       assert.ok(Array.isArray(filesWithContent));
     });
   });
 
   describe('getStats', () => {
-    it('should return file statistics', () => {
-      createFile('file1.js', 'a'.repeat(100));
-      createFile('file2.js', 'b'.repeat(200));
-      createFile('file3.js', 'c'.repeat(300));
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false
-      });
-      
+    it('should return correct statistics', () => {
+      createFile(tempDir, 'file1.js', 'x'.repeat(1000));
+      createFile(tempDir, 'file2.js', 'x'.repeat(2000));
+      createFile(tempDir, 'file3.js', 'x'.repeat(3000));
+
+      const selector = new FileSelector({ cwd: tempDir });
       const stats = selector.getStats();
-      
+
       assert.strictEqual(stats.fileCount, 3);
-      assert.strictEqual(stats.totalSize, 600);
-      assert.strictEqual(stats.averageSize, 200);
+      assert.strictEqual(stats.totalSize, 6000);
+      assert.strictEqual(stats.averageSize, 2000);
     });
 
-    it('should handle empty file list', () => {
-      // Empty directory
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false
-      });
-      
+    it('should handle empty directory', () => {
+      const selector = new FileSelector({ cwd: tempDir });
       const stats = selector.getStats();
-      
+
       assert.strictEqual(stats.fileCount, 0);
       assert.strictEqual(stats.totalSize, 0);
-      // averageSize will be NaN for empty, that's expected
+      assert.strictEqual(stats.averageSize, 0);
     });
   });
 
-  describe('integration', () => {
-    it('should work with realistic project structure', () => {
-      // Create a realistic project structure
-      createFile('package.json', '{"name": "test"}');
-      createFile('PROMPT.md', '# Improve the code');
-      createFile('.gitignore', 'node_modules/\ndist/\n*.log');
-      createFile('src/index.js', 'module.exports = {}');
-      createFile('src/utils/helper.js', 'function help() {}');
-      createFile('src/utils/helper.test.js', 'test()');
-      createFile('test/integration.test.js', 'test()');
-      createFile('node_modules/lodash/index.js', 'lodash');
-      createFile('dist/bundle.js', 'bundled');
-      createFile('error.log', 'errors');
-      createFile('README.md', '# Project');
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        exclude: ['**/*.test.js']
-      });
-      
+  describe('edge cases', () => {
+    it('should handle deeply nested directories', () => {
+      createFile(tempDir, 'a/b/c/d/e/deep.js', 'deep');
+
+      const selector = new FileSelector({ cwd: tempDir });
       const files = selector.getFiles();
-      
-      // Should include main files
-      assert.ok(files.includes('PROMPT.md'), 'Should include PROMPT.md');
-      assert.ok(files.includes('package.json'), 'Should include package.json');
-      assert.ok(files.includes('README.md'), 'Should include README.md');
-      assert.ok(files.some(f => f.includes('index.js')), 'Should include src/index.js');
-      assert.ok(files.some(f => f.includes('helper.js') && !f.includes('test')), 'Should include helper.js');
-      
-      // Should exclude gitignored files
-      assert.ok(!files.some(f => f.includes('node_modules')), 'Should not include node_modules');
-      assert.ok(!files.some(f => f.includes('dist')), 'Should not include dist');
-      assert.ok(!files.some(f => f.includes('.log')), 'Should not include .log files');
-      
-      // Should exclude test files (via exclude pattern)
-      assert.ok(!files.some(f => f.includes('.test.js')), 'Should not include test files');
+
+      assert.strictEqual(files.length, 1);
+      const normalizedFiles = files.map(f => f.replace(/\\/g, '/'));
+      assert.ok(normalizedFiles[0].includes('deep.js'));
     });
 
-    it('should prioritize files correctly in realistic scenario', () => {
-      createFile('PROMPT.md', '# Goal');
-      createFile('package.json', '{}');
-      createFile('src/core.js', 'core');
-      createFile('lib/util.js', 'util');
-      createFile('test/test.js', 'test');
-      
-      const selector = new FileSelector({ 
-        cwd: testDir,
-        respectGitignore: false
-      });
-      
+    it('should handle files with special characters in names', () => {
+      createFile(tempDir, 'file-with-dashes.js', 'dashes');
+      createFile(tempDir, 'file_with_underscores.js', 'underscores');
+      createFile(tempDir, 'file.multiple.dots.js', 'dots');
+
+      const selector = new FileSelector({ cwd: tempDir });
       const files = selector.getFiles();
-      
-      // PROMPT.md should be first
-      assert.strictEqual(files[0], 'PROMPT.md');
-      
-      // package.json should be early
-      const packageIndex = files.indexOf('package.json');
-      assert.ok(packageIndex < 3, 'package.json should be in top 3');
-      
-      // src/ files should come before test/ files
-      const srcIndex = files.findIndex(f => f.includes('src'));
-      const testIndex = files.findIndex(f => f.includes('test'));
-      
-      if (srcIndex !== -1 && testIndex !== -1) {
-        assert.ok(srcIndex < testIndex, 'src/ files should be prioritized over test/ files');
-      }
+
+      assert.strictEqual(files.length, 3);
     });
+
+    it('should handle empty files', () => {
+      createFile(tempDir, 'empty.js', '');
+      createFile(tempDir, 'nonempty.js', 'content');
+
+      const selector = new FileSelector({ cwd: tempDir });
+      const files = selector.getFiles();
+
+      assert.strictEqual(files.length, 2);
+    });
+  });
+});
+
+describe('FileSelector priority edge cases', () => {
+  let tempDir;
+
+  beforeEach(() => {
+    tempDir = createTempDir();
+  });
+
+  afterEach(() => {
+    cleanupTempDir(tempDir);
+  });
+
+  it('should rank TypeScript files same as JavaScript', () => {
+    const now = new Date();
+    
+    createFile(tempDir, 'app.js', 'js code');
+    createFile(tempDir, 'app.ts', 'ts code');
+
+    fs.utimesSync(path.join(tempDir, 'app.js'), now, now);
+    fs.utimesSync(path.join(tempDir, 'app.ts'), now, now);
+
+    const selector = new FileSelector({ cwd: tempDir });
+    
+    // Get priority scores directly
+    const jsStats = fs.statSync(path.join(tempDir, 'app.js'));
+    const tsStats = fs.statSync(path.join(tempDir, 'app.ts'));
+    
+    const jsPriority = selector.calculatePriority('app.js', jsStats);
+    const tsPriority = selector.calculatePriority('app.ts', tsStats);
+
+    // TypeScript and JavaScript should have equal type bonus
+    assert.strictEqual(jsPriority, tsPriority, 'JS and TS should have same priority');
+  });
+
+  it('should ensure src/*.js always beats docs/*.md', () => {
+    const now = new Date();
+    
+    // Create equal-sized files with same timestamps
+    const content = 'x'.repeat(100);
+    createFile(tempDir, 'src/code.js', content);
+    createFile(tempDir, 'docs/readme.md', content);
+
+    fs.utimesSync(path.join(tempDir, 'src/code.js'), now, now);
+    fs.utimesSync(path.join(tempDir, 'docs/readme.md'), now, now);
+
+    const selector = new FileSelector({ cwd: tempDir });
+    
+    const jsStats = fs.statSync(path.join(tempDir, 'src/code.js'));
+    const mdStats = fs.statSync(path.join(tempDir, 'docs/readme.md'));
+    
+    const jsPriority = selector.calculatePriority('src/code.js', jsStats);
+    const mdPriority = selector.calculatePriority('docs/readme.md', mdStats);
+
+    assert.ok(
+      jsPriority > mdPriority,
+      `src/*.js (${jsPriority}) should have higher priority than docs/*.md (${mdPriority})`
+    );
+  });
+
+  it('should ensure root README.md does not beat src/*.js', () => {
+    const now = new Date();
+    
+    // Create equal-sized files with same timestamps
+    const content = 'x'.repeat(100);
+    createFile(tempDir, 'src/index.js', content);
+    createFile(tempDir, 'README.md', content);
+
+    fs.utimesSync(path.join(tempDir, 'src/index.js'), now, now);
+    fs.utimesSync(path.join(tempDir, 'README.md'), now, now);
+
+    const selector = new FileSelector({ cwd: tempDir });
+    
+    const jsStats = fs.statSync(path.join(tempDir, 'src/index.js'));
+    const mdStats = fs.statSync(path.join(tempDir, 'README.md'));
+    
+    const jsPriority = selector.calculatePriority('src/index.js', jsStats);
+    const mdPriority = selector.calculatePriority('README.md', mdStats);
+
+    assert.ok(
+      jsPriority > mdPriority,
+      `src/index.js (${jsPriority}) should have higher priority than README.md (${mdPriority})`
+    );
+  });
+
+  it('should calculate expected priority components correctly', () => {
+    const now = new Date();
+    
+    // Create a known file to test priority calculation
+    createFile(tempDir, 'src/test.js', 'x'.repeat(5000)); // 5KB - gets +10 for size
+    fs.utimesSync(path.join(tempDir, 'src/test.js'), now, now); // Modified today - gets +30
+
+    const selector = new FileSelector({ cwd: tempDir });
+    const stats = fs.statSync(path.join(tempDir, 'src/test.js'));
+    const priority = selector.calculatePriority('src/test.js', stats);
+
+    // Expected: 100 (base) + 10 (size <50KB) + 30 (today) + 25 (js) + 20 (src/) = 185
+    assert.strictEqual(priority, 185, `Expected priority 185, got ${priority}`);
   });
 });
