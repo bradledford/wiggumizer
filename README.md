@@ -106,16 +106,18 @@ wiggumize run
 
 ### What Updates Automatically vs. Manually
 
-**Automatic** (Wiggumizer manages):
-- ✅ Task checkboxes in PROMPT.md (`- [ ]` → `- [✅]`)
-- ✅ `.ralph-notes.md` (AI leaves notes for next iteration)
-- ✅ `CHANGELOG.md` (summary of changes)
-- ✅ `.wiggumizer/iterations/` logs
+**Automatic** (Wiggumizer modifies these files):
+- ✅ **PROMPT.md checkboxes** - Wiggumizer directly edits PROMPT.md to change `- [ ]` → `- [✅]` as work completes
+- ✅ **`.ralph-notes.md`** - AI leaves notes for next iteration
+- ✅ **`CHANGELOG.md`** - Summary of changes
+- ✅ **`.wiggumizer/iterations/`** - Detailed logs
 
 **Manual** (You control):
-- ✋ Core PROMPT.md instructions and goals
-- ✋ Deciding what to work on next
-- ✋ When to run again vs. commit and stop
+- ✋ **PROMPT.md content** - Core instructions, goals, adding new tasks
+- ✋ **What to work on next** - Deciding direction between sessions
+- ✋ **When to run vs. commit** - Workflow control
+
+**Important:** PROMPT.md is a living document - Wiggumizer automatically updates checkbox status in the file, but you control everything else.
 
 This keeps you in the driver's seat while letting the AI iterate within your defined boundaries.
 

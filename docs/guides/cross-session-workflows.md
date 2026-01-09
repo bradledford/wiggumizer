@@ -195,16 +195,35 @@ Keep prompts **focused** and **phased**.
 
 ### 3. Use Checkboxes for Sub-Tasks
 
-Wiggumizer auto-updates checkboxes as work completes:
+**Important:** Wiggumizer automatically modifies your PROMPT.md file to update checkbox status as work completes.
 
+When you write checkboxes in PROMPT.md like this:
 ```markdown
 ## Work Plan
-- [✅] Create ProfilePage component  ← Auto-marked by Wiggumizer
-- [✅] Add form validation           ← Auto-marked
+- [ ] Create ProfilePage component
+- [ ] Add form validation
+- [ ] Write tests
+```
+
+Wiggumizer will **automatically edit PROMPT.md** after each iteration, changing it to:
+```markdown
+## Work Plan
+- [✅] Create ProfilePage component  ← Auto-updated in PROMPT.md
+- [✅] Add form validation           ← Auto-updated in PROMPT.md
 - [ ] Write tests                    ← Still pending
 ```
 
-This helps you see progress at a glance.
+**How it works:**
+- After each iteration, Wiggumizer analyzes which files were modified
+- It matches file paths and keywords to checkbox tasks
+- It updates `- [ ]` to `- [✅]` directly in your PROMPT.md file
+- The file is saved back to disk automatically
+
+**This means:**
+- ✅ You get visual progress tracking automatically
+- ✅ PROMPT.md shows current status when you come back days later
+- ✋ But you still control the task list (adding/removing tasks)
+- ✋ And you still control the overall goals and direction
 
 ### 4. Let the AI Use .ralph-notes.md
 
@@ -314,9 +333,17 @@ Each session builds on the previous work through:
 **Golden Rule:** Treat PROMPT.md as your steering wheel. Update it between sessions to direct the AI's focus.
 
 **Remember:**
-- ✅ Auto-updates: Checkboxes, .ralph-notes.md, CHANGELOG.md
-- ✋ Manual control: Core PROMPT.md goals and direction
-- 🔍 AI discovers: Previous work via git history
-- 🎯 You decide: What to work on next
+- ✅ **Auto-updates (Wiggumizer modifies these files):**
+  - **PROMPT.md checkboxes** - `- [ ]` becomes `- [✅]` as tasks complete
+  - **.ralph-notes.md** - AI leaves breadcrumb notes for itself
+  - **CHANGELOG.md** - Summary of all changes made
+- ✋ **Manual control (You edit these):**
+  - **PROMPT.md core content** - Goals, instructions, new tasks
+  - **What to work on next** - You decide direction between sessions
+  - **When to run vs. commit** - You control the workflow
+- 🔍 **AI discovers:** Previous work via git history
+- 🎯 **You decide:** What to work on next
+
+**Key insight:** PROMPT.md is a **living document** - checkboxes update automatically, but you control the content and direction.
 
 The AI is your co-pilot, but you're the pilot.
