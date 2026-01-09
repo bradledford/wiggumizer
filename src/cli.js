@@ -146,6 +146,43 @@ program
     console.log(chalk.dim('Available actions: list, show\n'));
   });
 
+// Multi command - multi-repository workspace management
+const multiCommand = program
+  .command('multi')
+  .description('Manage multi-repository workspaces');
+
+multiCommand
+  .command('status')
+  .description('Show status of all configured workspaces')
+  .option('-v, --verbose', 'Show detailed file information')
+  .action(async (options) => {
+    const multiStatusCommand = require('./commands/multi-status');
+    await multiStatusCommand(options);
+  });
+
+multiCommand
+  .command('run')
+  .description('Run Ralph loop across all configured workspaces')
+  .option('-p, --prompt <file>', 'Prompt file to use', 'PROMPT.md')
+  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER || 'claude')
+  .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
+  .option('-v, --verbose', 'Verbose output')
+  .option('-q, --quiet', 'Minimal output')
+  .option('--dry-run', 'Show what would change without modifying files')
+  .option('--auto-commit', 'Automatically commit changes after each iteration')
+  .action(async (options) => {
+    const multiRunCommand = require('./commands/multi-run');
+    await multiRunCommand(options);
+  });
+
+multiCommand
+  .command('validate')
+  .description('Validate workspace configuration')
+  .action(async () => {
+    const multiValidateCommand = require('./commands/multi-validate');
+    await multiValidateCommand();
+  });
+
 // Logs command - view iteration logs
 program
   .command('logs')
@@ -209,6 +246,13 @@ program
     const configPath = path.join(process.cwd(), '.wiggumizer.yml');
     if (fs.existsSync(configPath)) {
       console.log(chalk.green('✓') + ' .wiggumizer.yml found');
+      
+      // Check for workspaces config
+      const ConfigLoader = require('./config');
+      const config = ConfigLoader.load();
+      if (config.workspaces && config.workspaces.length > 0) {
+        console.log(chalk.green('✓') + ` Multi-repo: ${config.workspaces.length} workspace(s) configured`);
+      }
     } else {
       console.log(chalk.yellow('⚠') + ' .wiggumizer.yml not found (run: wiggumize init)');
     }

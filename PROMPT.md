@@ -32,7 +32,7 @@ The documentation extensively describes features that **don't exist**:
 
 #### A. Fix Misleading CLI Documentation
 - [ ] Audit docs/cli-reference/ and mark unimplemented features as "Coming Soon"
-- [ ] Remove or clearly mark missing `run` command options in docs/cli-reference/commands/run.md
+- [ ] Clearly mark (with "Coming Soon" or "Not Yet Implemented" badges) any unimplemented `run` command options in docs/cli-reference/commands/run.md - DO NOT remove documentation, only add status markers
 - [ ] Add "Status: Not Yet Implemented" badges to aspirational docs
 - [ ] Create docs/ROADMAP.md showing what's planned vs implemented
 
@@ -145,6 +145,171 @@ The documentation extensively describes features that **don't exist**:
 4. **Document --auto-commit** - Exists but undocumented
 5. **Create docs/ROADMAP.md** - Show users what's real vs planned
 
+---
+
+## Phase 6: Ralph-Inspired Enhancements
+
+**Goal**: Emulate key features from the [snarktank/ralph](https://github.com/snarktank/ralph) implementation to improve autonomous iteration quality and persistence.
+
+### A. PRD-Based Workflow (Story Mode)
+Ralph uses structured `prd.json` files to track individual user stories with completion status. This complements Wiggumizer's PROMPT.md approach.
+
+- [ ] Create `src/prd-manager.js` - Parse and manage PRD files
+- [ ] Support `prd.json` format with user stories:
+  ```json
+  {
+    "userStories": [
+      {
+        "id": "US-001",
+        "title": "Add dark mode toggle",
+        "description": "...",
+        "priority": 1,
+        "passes": false,
+        "acceptanceCriteria": ["tests pass", "UI renders"]
+      }
+    ]
+  }
+  ```
+- [ ] Add `--prd <file>` option to `run` command (use PRD mode instead of PROMPT.md)
+- [ ] Implement story selection logic: pick highest priority where `passes: false`
+- [ ] Add `wiggumize prd init` command - Convert PROMPT.md checkboxes to prd.json
+- [ ] Add `wiggumize prd status` command - Show completion status of all stories
+- [ ] Update PRD status after each iteration (mark `passes: true` on success)
+
+### B. Learning Persistence (`progress.txt`)
+Ralph maintains an append-only log capturing learnings between iterations, providing memory across fresh contexts.
+
+- [ ] Create `src/progress-logger.js` - Manage iteration learning log
+- [ ] Generate `progress.txt` file in project root (or `.wiggumizer/progress.txt`)
+- [ ] After each iteration, append:
+  - Iteration number and timestamp
+  - Story/task worked on
+  - Changes made (files modified)
+  - Tests/checks passed or failed
+  - Key learnings or gotchas discovered
+- [ ] Include `progress.txt` in context for next iteration (as reference)
+- [ ] Add `--progress-file <path>` option to customize location
+- [ ] Add `wiggumize progress show` command - Display recent learnings
+- [ ] Archive old progress files when starting new sessions
+
+### C. Codebase Pattern Documentation (`AGENTS.md`)
+Ralph updates `AGENTS.md` files with discovered patterns, conventions, and gotchas to benefit future iterations.
+
+- [ ] Create `src/agents-updater.js` - Manage pattern documentation
+- [ ] Detect or create `AGENTS.md` files in relevant directories
+- [ ] After successful iterations, prompt AI to update AGENTS.md with:
+  - Architectural patterns discovered
+  - Code conventions in this area
+  - Common gotchas or pitfalls
+  - Testing approaches that work
+- [ ] Include relevant AGENTS.md files in iteration context
+- [ ] Add `--update-agents` flag to enable/disable this feature
+- [ ] Add section markers: `## Patterns`, `## Conventions`, `## Gotchas`, `## Testing`
+
+### D. Quality Gates & Verification
+Ralph enforces quality checks (type-checking, tests) before marking tasks complete.
+
+- [ ] Create `src/quality-checker.js` - Run configurable quality gates
+- [ ] Support quality check definitions in `.wiggumizer.yml`:
+  ```yaml
+  qualityGates:
+    - name: "Type Check"
+      command: "npm run typecheck"
+      required: true
+    - name: "Unit Tests"
+      command: "npm test"
+      required: true
+    - name: "Lint"
+      command: "npm run lint"
+      required: false
+  ```
+- [ ] Run quality gates after each iteration
+- [ ] Only mark task complete if required gates pass
+- [ ] Report gate results in progress.txt and iteration logs
+- [ ] Add `--skip-quality-gates` flag for development/debugging
+- [ ] Add `--quality-gate <name>` to run specific gate only
+
+### E. Fresh Context Mode (Ralph's Core Innovation)
+Ralph spawns fresh AI instances per iteration to prevent context degradation. Adapt this for Wiggumizer.
+
+- [ ] Add `--fresh-context` mode to `run` command
+- [ ] In fresh context mode:
+  - Limit context to: PROMPT.md (or current story), progress.txt, AGENTS.md, selected files
+  - Don't include full conversation history from previous iterations
+  - Each iteration starts with clean slate + memory files
+- [ ] Implement context handoff mechanism:
+  - Save iteration summary to progress.txt
+  - Update PRD status
+  - Commit changes
+  - Next iteration reads memory files but not full chat history
+- [ ] Add `context.fresh` config option to enable by default
+- [ ] Balance between fresh context (prevents bloat) and continuity (maintains understanding)
+
+### F. Session Archival
+Ralph archives previous runs with timestamps for debugging and reference.
+
+- [ ] Create `src/session-archiver.js` - Archive completed sessions
+- [ ] On new session start, archive previous session:
+  - Move `.wiggumizer/logs/*` to `.wiggumizer/archive/<timestamp>/`
+  - Archive progress.txt as `progress-<timestamp>.txt`
+  - Keep git history intact
+- [ ] Add `--archive-previous` flag (default: true)
+- [ ] Add `wiggumize sessions list` command - Show archived sessions
+- [ ] Add `wiggumize sessions restore <timestamp>` - Restore archived session
+- [ ] Limit archive retention (config: `archive.maxSessions`, default: 10)
+
+### G. Single-Task Focus Mode
+Ralph focuses on one user story per iteration. Add similar capability to Wiggumizer.
+
+- [ ] Add `--single-task` mode to `run` command
+- [ ] In single-task mode:
+  - Parse PROMPT.md for checkboxes or load from prd.json
+  - Select ONE task (highest priority uncompleted)
+  - Focus iteration only on that task
+  - Mark complete and commit only if task passes quality gates
+  - Move to next task in subsequent iteration
+- [ ] Integrate with PRD workflow (single story mode)
+- [ ] Add `--task-id <id>` to work on specific task
+- [ ] Report focused task clearly in iteration output
+
+### H. Browser/UI Verification (Future)
+Ralph includes browser verification for UI components. Plan for integration.
+
+- [ ] Research integration with Playwright or Puppeteer
+- [ ] Add `qualityGates` entry for visual regression testing
+- [ ] Support screenshot comparison for UI changes
+- [ ] Document in Phase 5 (Nice-to-Have)
+
+## Implementation Priority: Ralph Features
+
+**High Priority (Implement Soon):**
+1. **PRD-Based Workflow** - Structured task tracking superior to PROMPT.md checkboxes
+2. **Learning Persistence** - progress.txt provides memory across iterations
+3. **Quality Gates** - Ensure iterations produce working code
+4. **Session Archival** - Essential for debugging and rollback
+
+**Medium Priority (After Core Features):**
+5. **AGENTS.md Pattern Documentation** - Builds institutional knowledge
+6. **Single-Task Focus Mode** - Complements existing convergence mode
+7. **Fresh Context Mode** - Prevents context bloat (needs careful design)
+
+**Low Priority (Future):**
+8. **Browser/UI Verification** - Nice to have, requires additional dependencies
+
+## Integration Strategy
+
+Ralph's approach complements Wiggumizer rather than replacing it:
+- **Ralph**: Single story, fresh context, quality gates, structured PRD
+- **Wiggumizer**: Multi-file convergence, intelligent file selection, retry logic
+
+**Hybrid approach:**
+- Add `--mode <convergence|story>` option
+  - `convergence` mode (default): Current Wiggumizer behavior
+  - `story` mode: Ralph-style PRD-based workflow
+- Let users choose based on use case:
+  - Convergence mode: Refactoring, bug fixes, iterative improvements
+  - Story mode: Feature development, PRD execution, structured tasks
+
 ## Meta-Notes
 
 The docs were written aspirationally (describing the vision) rather than accurately (describing reality). This is **dangerous** - users will be frustrated when promised features don't work.
@@ -155,4 +320,10 @@ The docs were written aspirationally (describing the vision) rather than accurat
 
 **Recommendation**: Do both - fix docs NOW, implement features over time.
 
-Let's make Wiggumizer's documentation match its reality! 🎯
+**Ralph Integration**: Ralph's approach to autonomous iteration offers valuable patterns:
+- Memory persistence without context bloat (progress.txt + AGENTS.md)
+- Quality gates prevent error accumulation
+- Fresh contexts prevent degradation
+- PRD structure provides clear completion criteria
+
+Let's make Wiggumizer's documentation match its reality AND incorporate Ralph's best practices! 🎯

@@ -225,15 +225,37 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
   }
 
   detectNoChanges(content) {
-    const noChangePatterns = [
-      /no changes needed/i,
-      /no modifications needed/i,
-      /already satisfies/i,
-      /code is already/i,
-      /no improvements needed/i
-    ];
+    // Check if response is explicitly stating no changes (must be short and clear)
+    const trimmed = content.trim();
 
-    return noChangePatterns.some(pattern => pattern.test(content));
+    // Explicit "NO CHANGES NEEDED" response (as instructed in system prompt)
+    if (/^NO\s+CHANGES\s+NEEDED/i.test(trimmed)) {
+      return true;
+    }
+
+    // Only detect "no changes" in SHORT responses (< 200 chars)
+    // This prevents false positives when Claude mentions "already implemented" in analysis
+    // but then provides actual file changes
+    if (trimmed.length < 200) {
+      const noChangePatterns = [
+        /no changes needed/i,
+        /no modifications needed/i,
+        /nothing to change/i,
+        /no improvements needed/i
+      ];
+
+      if (noChangePatterns.some(pattern => pattern.test(content))) {
+        return true;
+      }
+    }
+
+    // Check if response contains file changes (## File: pattern)
+    // If it has file changes, it's definitely not "no changes"
+    if (/##\s*File:/i.test(content)) {
+      return false;
+    }
+
+    return false;
   }
 
   extractSummary(content) {
