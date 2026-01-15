@@ -1,4 +1,4 @@
-[!WARNING]  
+> **WARNING**
 > This library is under active development, primarily using Wiggumizer itself to work through the missing elements. There are currently Documentation inaccuracies, issues with the file parsing logic, strange behaviors that need prompt engineering, and so on. Use at your own risk!
 
 # Wiggumizer
