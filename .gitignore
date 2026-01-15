@@ -8,3 +8,11 @@ build/
 coverage/
 .vscode/
 .idea/
+.claude/
+.github/
+.ralph-notes.md
+.wiggumizer.yml
+
+# Generated Documentation
+CHANGELOG.md
+PROMPT.md

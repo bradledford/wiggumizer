@@ -1,0 +1,52 @@
+# Test files
+test/
+tests/
+*.test.js
+*.spec.js
+__tests__/
+coverage/
+
+# Development files
+.wiggumizer/
+.claude/
+.ralph-notes.md
+
+# Documentation (users can read on GitHub)
+docs/
+examples/
+*.md
+!README.md
+
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+.travis.yml
+.circleci/
+
+# Development config
+.eslintrc*
+.prettierrc*
+jest.config.js
+.editorconfig
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build artifacts (if any)
+dist/
+build/
