@@ -51,7 +51,11 @@ class ConfigLoader {
       providers: {
         claude: {
           model: 'claude-opus-4-5-20251101',
-          maxTokens: 8192
+          maxTokens: 16384  // Claude Opus 4.5 supports up to 32K, using 16K as conservative default
+        },
+        'claude-cli': {
+          model: 'claude-opus-4-5-20251101',
+          maxTokens: 16384  // Uses claude CLI instead of API - leverages Claude Pro/Max subscription
         },
         openai: {
           model: 'gpt-5',

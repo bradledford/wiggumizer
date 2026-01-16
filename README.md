@@ -213,14 +213,59 @@ Run all existing tests after each change to ensure compatibility.
 - Learn new patterns and frameworks
 - Explore different approaches
 
+## AI Providers
+
+Wiggumizer supports two ways to use Claude AI:
+
+### Claude API (default)
+Uses the Anthropic API directly. Requires an API key and charges based on usage.
+
+```bash
+export ANTHROPIC_API_KEY=your-api-key-here
+wiggumize run --provider claude
+```
+
+**Best for:**
+- Production use
+- CI/CD pipelines
+- Precise cost tracking
+- Advanced retry and rate limiting features
+
+### Claude CLI
+Uses the `claude` CLI command, which leverages your Claude Pro or Max subscription instead of API costs.
+
+```bash
+# Install the Claude CLI
+npm install -g @anthropic-ai/claude-cli
+
+# Use it with Wiggumizer
+wiggumize run --provider claude-cli
+```
+
+**Best for:**
+- Personal projects
+- Heavy usage (fixed monthly cost)
+- Claude Pro/Max subscribers
+- Simplified setup (no API key management)
+
+**Note:** The CLI provider has simplified error handling (no automatic retries) but works great for most use cases.
+
 ## Configuration
 
 Create `.wiggumizer.yml` in your project:
 
 ```yaml
-provider: claude
-api_keys:
-  anthropic: ${ANTHROPIC_API_KEY}
+# Choose your provider
+provider: claude  # or 'claude-cli'
+
+# Provider-specific settings
+providers:
+  claude:
+    model: claude-opus-4-5-20251101
+    maxTokens: 16384
+  claude-cli:
+    model: claude-opus-4-5-20251101
+    maxTokens: 16384
 
 defaults:
   max_iterations: 20
