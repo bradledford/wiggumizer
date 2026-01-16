@@ -1,9 +1,8 @@
-const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
 const ora = require('ora');
 const ClaudeProvider = require('./providers/claude');
-const FileValidator = require('./validator');
+const ClaudeCliProvider = require('./providers/claude-cli');
 const GitHelper = require('./git-helper');
 const IterationLogger = require('./iteration-logger');
 const ConvergenceAnalyzer = require('./convergence-analyzer');
@@ -60,6 +59,12 @@ class RalphLoop {
         requestsPerHour: options.rateLimit?.requestsPerHour
       };
       this.provider = new ClaudeProvider(providerConfig);
+    } else if (providerName === 'claude-cli') {
+      const providerConfig = {
+        ...(options.providerConfig?.['claude-cli'] || {}),
+        verbose: this.verbose
+      };
+      this.provider = new ClaudeCliProvider(providerConfig);
     } else {
       throw new Error(`Provider ${providerName} not yet implemented. Coming soon!`);
     }
@@ -333,7 +338,7 @@ class RalphLoop {
     }
     console.log();
 
-    // Return summary data for CHANGELOG generation
+    // Return summary data for session summary generation
     return {
       totalIterations: this.iteration,
       filesModified: this.filesModifiedTotal,
@@ -366,64 +371,18 @@ class RalphLoop {
 
 
   applyChanges(changesText) {
+    const DiffApplier = require('./diff-applier');
+
     // Use WorkspaceManager to apply changes to the appropriate workspace
-    const result = this.workspaceManager.applyChanges(changesText, (workspace, changes) => {
-      let filesModified = 0;
-      const modifiedFiles = [];
-      const backups = new Map();
+    const result = this.workspaceManager.applyChanges(changesText, (workspace, diffText) => {
+      const workspacePath = this.workspaceManager.resolvePath(workspace.path);
 
-      for (const { filePath, fileContent, fullPath } of changes) {
-        try {
-          // Validate file content before writing
-          const validation = FileValidator.validate(filePath, fileContent);
-          if (!validation.valid) {
-            console.error(chalk.red(`    ✗ Validation failed for ${filePath}`));
-            console.error(chalk.dim(`      ${validation.details}`));
-            console.log(chalk.yellow('      Skipping this file to prevent breaking changes'));
-            continue;
-          }
-
-          // Backup existing file
-          if (fs.existsSync(fullPath)) {
-            const backup = fs.readFileSync(fullPath, 'utf-8');
-            backups.set(fullPath, backup);
-          }
-
-          // Ensure directory exists
-          const dir = path.dirname(fullPath);
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-          }
-
-          // Write the file
-          fs.writeFileSync(fullPath, fileContent, 'utf-8');
-
-          if (this.verbose) {
-            const displayPath = this.workspaceManager.isMultiRepo()
-              ? `[${workspace.name}] ${filePath}`
-              : filePath;
-            console.log(chalk.dim(`    Modified: ${displayPath}`));
-          }
-
-          filesModified++;
-          modifiedFiles.push(filePath);
-        } catch (error) {
-          console.error(chalk.red(`    ✗ Failed to write ${filePath}: ${error.message}`));
-
-          // Rollback any files we've modified so far
-          console.log(chalk.yellow('    Rolling back changes...'));
-          for (const [backupPath, backupContent] of backups) {
-            fs.writeFileSync(backupPath, backupContent, 'utf-8');
-          }
-          filesModified = 0;
-          modifiedFiles.length = 0;
-          break;
-        }
-      }
+      // Apply diffs using the DiffApplier
+      const diffResult = DiffApplier.applyDiffs(diffText, workspacePath, this.verbose);
 
       // Create git backup if in a repo and files were modified (only if auto-commit is enabled)
-      if (filesModified > 0 && this.autoCommit && GitHelper.isGitRepo(workspace.absolutePath)) {
-        const committed = GitHelper.createBackupCommit(this.iteration, workspace.absolutePath);
+      if (diffResult.filesModified.length > 0 && this.autoCommit && GitHelper.isGitRepo(workspacePath)) {
+        const committed = GitHelper.createBackupCommit(this.iteration, workspacePath);
         if (committed && this.verbose) {
           const repoLabel = this.workspaceManager.isMultiRepo()
             ? `[${workspace.name}]`
@@ -432,9 +391,17 @@ class RalphLoop {
         }
       }
 
+      // Report errors if any
+      if (diffResult.errors.length > 0) {
+        console.error(chalk.red(`    ✗ Errors applying diffs:`));
+        for (const error of diffResult.errors) {
+          console.error(chalk.red(`      ${error}`));
+        }
+      }
+
       return {
-        count: filesModified,
-        files: modifiedFiles
+        count: diffResult.filesModified.length,
+        files: diffResult.filesModified
       };
     });
 

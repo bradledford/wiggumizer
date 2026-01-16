@@ -205,16 +205,20 @@ describe('RalphLoop Integration with WorkspaceManager', () => {
         maxIterations: 1
       });
 
-      const changesText = `## File: test.js
-\`\`\`javascript
-console.log("changed");
+      const changesText = `\`\`\`diff
+--- a/test.js
++++ b/test.js
+@@ -1,1 +1,1 @@
+-console.log("old");
++console.log("new");
 \`\`\``;
 
-      // Verify signature as used in loop.js:370
-      const result = loop.workspaceManager.applyChanges(changesText, (workspace, changes) => {
+      // Verify signature as used in loop.js:379
+      const result = loop.workspaceManager.applyChanges(changesText, (workspace, diffText) => {
         assert.ok(workspace);
-        assert.ok(Array.isArray(changes));
-        return { count: changes.length, files: changes.map(c => c.filePath) };
+        assert.strictEqual(typeof diffText, 'string');
+        assert.ok(diffText.includes('diff'));
+        return { count: 1, files: ['test.js'] };
       });
 
       assert.ok(result);

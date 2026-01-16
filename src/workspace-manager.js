@@ -136,6 +136,12 @@ class WorkspaceManager {
    * Resolve a workspace path (relative to baseDir or absolute)
    */
   resolvePath(workspacePath) {
+    // Expand ~ to home directory
+    if (workspacePath.startsWith('~')) {
+      const os = require('os');
+      workspacePath = path.join(os.homedir(), workspacePath.slice(1));
+    }
+
     if (path.isAbsolute(workspacePath)) {
       return workspacePath;
     }
@@ -228,38 +234,97 @@ class WorkspaceManager {
   }
 
   /**
+   * Get a workspace by name
+   * @param {string} name - Workspace name
+   * @returns {Object|undefined} Workspace config or undefined
+   */
+  getWorkspaceByName(name) {
+    return this.workspaces.find(ws => ws.name === name || path.basename(ws.path) === name);
+  }
+
+  /**
+   * Get combined context from all workspaces
+   * @param {Object} options - Options for context generation
+   * @returns {string} Combined context string
+   */
+  getCombinedContext(options = {}) {
+    const files = this.getAllFiles();
+    const maxSize = options.maxSize || 100000;
+
+    let context = '# Multi-Repository Codebase\n\n';
+    let totalSize = context.length;
+
+    // Group files by workspace
+    const byWorkspace = {};
+    for (const file of files) {
+      if (!byWorkspace[file.workspace]) {
+        byWorkspace[file.workspace] = [];
+      }
+      byWorkspace[file.workspace].push(file);
+    }
+
+    // Add files by workspace
+    for (const [wsName, wsFiles] of Object.entries(byWorkspace)) {
+      const wsHeader = `## Workspace: ${wsName}\n\n`;
+
+      if (totalSize + wsHeader.length > maxSize) {
+        break;
+      }
+
+      context += wsHeader;
+      totalSize += wsHeader.length;
+
+      for (const file of wsFiles) {
+        const fileSection = `### File: ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+
+        if (totalSize + fileSection.length > maxSize) {
+          context += `...(${wsFiles.length - wsFiles.indexOf(file)} more files in ${wsName})\n\n`;
+          break;
+        }
+
+        context += fileSection;
+        totalSize += fileSection.length;
+      }
+    }
+
+    return context;
+  }
+
+  /**
    * Apply changes from AI response
-   * Parses the changes text and applies them to the appropriate workspace(s)
+   * Parses the changes text (unified diff format) and applies them to the appropriate workspace(s)
    *
-   * @param {string} changesText - The raw text from AI containing file changes
-   * @param {function} applyCallback - Function(workspace, changes) to apply changes to a workspace
+   * @param {string} changesText - The raw text from AI containing diffs
+   * @param {function} applyCallback - Function(workspace, diffResults) to apply changes to a workspace
    * @returns {object} - { count: number, files: string[] }
    */
   applyChanges(changesText, applyCallback) {
-    // Parse changes to extract file modifications
-    // Pattern: ## File: [workspace-name] path/to/file.js OR ## File: path/to/file.js
-    const filePattern = /##\s*File:\s*(?:\[([^\]]+)\]\s*)?([^\n]+)\n```[^\n]*\n([\s\S]*?)```/g;
+    const DiffApplier = require('./diff-applier');
 
     const isMultiRepo = this.isMultiRepo();
     const changesByWorkspace = new Map();
-    let match;
 
-    // Group changes by workspace
-    while ((match = filePattern.exec(changesText)) !== null) {
-      const workspaceName = match[1]?.trim();
-      const filePath = match[2].trim();
-      const fileContent = match[3];
+    if (isMultiRepo) {
+      // Multi-repo mode: parse workspace prefix from diff paths
+      // Expected format: --- a/[workspace-name]/path/to/file
+      const fileDiffs = DiffApplier.parseDiff(changesText);
 
-      let targetWorkspace;
+      for (const fileDiff of fileDiffs) {
+        const filePath = fileDiff.newPath || fileDiff.oldPath;
+        if (!filePath) continue;
 
-      if (isMultiRepo) {
-        // In multi-repo mode, find the workspace by name
-        if (!workspaceName) {
+        // Extract workspace name from path like [workspace-name]/path/to/file
+        const workspaceMatch = filePath.match(/^\[([^\]]+)\]\/(.+)$/);
+
+        if (!workspaceMatch) {
           console.warn(chalk.yellow(`Warning: File ${filePath} has no workspace prefix in multi-repo mode, skipping`));
           continue;
         }
 
-        targetWorkspace = this.workspaces.find(w =>
+        const workspaceName = workspaceMatch[1];
+        const relativeFilePath = workspaceMatch[2];
+
+        const targetWorkspace = this.workspaces.find(w =>
           (w.name || w.path) === workspaceName
         );
 
@@ -267,30 +332,31 @@ class WorkspaceManager {
           console.warn(chalk.yellow(`Warning: Unknown workspace ${workspaceName}, skipping ${filePath}`));
           continue;
         }
-      } else {
-        // In single-repo mode, use current directory
-        targetWorkspace = {
-          name: 'default',
-          path: process.cwd()
-        };
+
+        const workspaceKey = targetWorkspace.name || targetWorkspace.path;
+
+        if (!changesByWorkspace.has(workspaceKey)) {
+          changesByWorkspace.set(workspaceKey, {
+            workspace: targetWorkspace,
+            diffText: ''
+          });
+        }
+
+        // Reconstruct diff for this workspace with corrected paths
+        let workspaceDiff = `--- a/${relativeFilePath}\n`;
+        workspaceDiff += `+++ b/${relativeFilePath}\n`;
+        for (const hunk of fileDiff.hunks) {
+          workspaceDiff += `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`;
+          workspaceDiff += hunk.lines.join('\n') + '\n';
+        }
+
+        changesByWorkspace.get(workspaceKey).diffText += workspaceDiff;
       }
-
-      const workspaceKey = targetWorkspace.name || targetWorkspace.path;
-
-      if (!changesByWorkspace.has(workspaceKey)) {
-        changesByWorkspace.set(workspaceKey, {
-          workspace: targetWorkspace,
-          changes: []
-        });
-      }
-
-      const workspacePath = this.resolvePath(targetWorkspace.path);
-      const fullPath = path.join(workspacePath, filePath);
-
-      changesByWorkspace.get(workspaceKey).changes.push({
-        filePath,
-        fileContent,
-        fullPath
+    } else {
+      // Single-repo mode: apply diffs directly
+      changesByWorkspace.set('default', {
+        workspace: { name: 'default', path: process.cwd() },
+        diffText: changesText
       });
     }
 
@@ -298,8 +364,8 @@ class WorkspaceManager {
     let totalFilesModified = 0;
     const allModifiedFiles = [];
 
-    for (const { workspace, changes } of changesByWorkspace.values()) {
-      const result = applyCallback(workspace, changes);
+    for (const { workspace, diffText } of changesByWorkspace.values()) {
+      const result = applyCallback(workspace, diffText);
 
       if (result && result.count) {
         totalFilesModified += result.count;

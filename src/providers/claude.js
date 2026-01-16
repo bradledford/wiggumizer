@@ -15,7 +15,7 @@ class ClaudeProvider {
 
     this.client = new Anthropic({ apiKey });
     this.model = config.model || 'claude-opus-4-5-20251101';
-    this.maxTokens = config.maxTokens || 8192;
+    this.maxTokens = config.maxTokens || 16384; // Claude Opus 4.5 supports up to 32K
 
     // Initialize error handler
     this.errorHandler = new ErrorHandler({
@@ -125,16 +125,36 @@ OUTPUT FORMAT (CRITICAL - follow exactly):
 ## Summary:
 [One line: what you're implementing/fixing]
 
-## File: path/to/file.js
-\`\`\`javascript
-complete file contents here
+## Changes:
+\`\`\`diff
+--- a/path/to/file.js
++++ b/path/to/file.js
+@@ -10,7 +10,7 @@
+ context line
+ context line
+-old line to remove
++new line to add
+ context line
+ context line
 \`\`\`
 
-RULES:
-- Include COMPLETE file contents (not diffs)
-- Use correct language identifier (javascript, python, etc.)
+DIFF FORMAT RULES (CRITICAL):
+- Output unified diff format (standard diff -u format)
+- Start each file with: --- a/path/to/file.ext and +++ b/path/to/file.ext
+- Include @@ line numbers with context
+- Lines starting with - are removed
+- Lines starting with + are added
+- Include 3 lines of context before and after changes
+- For new files, use: --- /dev/null and +++ b/path/to/file.ext
+- For deleted files, use: --- a/path/to/file.ext and +++ /dev/null
 - If goal is fully achieved, respond with only: "NO CHANGES NEEDED"
+- NEVER output complete file contents - ONLY diffs
 - Make each iteration count - substantial progress, not trivial tweaks
+
+WHY DIFFS:
+- Diffs only touch what needs changing - prevents accidental deletion of code
+- Can review exactly what's being changed
+- Safe even with large files or token limits
 
 REMEMBER: You are building on your own work. The codebase is your memory. Read it carefully.`;
   }
@@ -163,9 +183,10 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
         message += `\n`;
       }
 
-      message += `**IMPORTANT**: When outputting file changes, prefix the file path with the workspace name:\n`;
-      message += `## File: [workspace-name] path/to/file.js\n`;
-      message += `Example: ## File: [backend] src/api/users.js\n\n`;
+      message += `**IMPORTANT**: When outputting diffs, include the workspace name in the path:\n`;
+      message += `--- a/[workspace-name]/path/to/file.js\n`;
+      message += `+++ b/[workspace-name]/path/to/file.js\n`;
+      message += `Example: --- a/[backend]/src/api/users.js\n\n`;
     } else {
       // Single-repo mode - original behavior
 
@@ -202,22 +223,26 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
 
     message += `# Current Codebase:\n\n`;
 
-    // Add file contents
+    // Add file contents with line numbers (for diff generation)
     for (const file of context.files) {
+      const lines = file.content.split('\n');
+      const numberedContent = lines.map((line, idx) => `${idx + 1}│${line}`).join('\n');
+
       if (context.isMultiRepo) {
         // Multi-repo: include workspace tag
-        message += `## File: [${file.workspace}] ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+        message += `## File: [${file.workspace}] ${file.path}\n\`\`\`\n${numberedContent}\n\`\`\`\n\n`;
       } else {
         // Single-repo: original format
-        message += `## File: ${file.path}\n\`\`\`\n${file.content}\n\`\`\`\n\n`;
+        message += `## File: ${file.path}\n\`\`\`\n${numberedContent}\n\`\`\`\n\n`;
       }
     }
 
     // Simple, constant instructions (no variation by iteration)
     message += `\n---\n\n`;
-    message += `Examine the codebase above. Make substantial progress toward the goal.\n`;
+    message += `Examine the codebase above (line numbers provided). Make substantial progress toward the goal.\n`;
+    message += `Output your changes as unified diffs - only touch what needs changing.\n`;
     if (context.isMultiRepo) {
-      message += `Remember: Changes may span multiple repositories. Tag each file with its workspace.\n`;
+      message += `Remember: Changes may span multiple repositories. Include workspace name in diff paths.\n`;
     }
     message += `Remember: You are building on your own prior work. The files show your progress.`;
 
@@ -249,9 +274,9 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
       }
     }
 
-    // Check if response contains file changes (## File: pattern)
-    // If it has file changes, it's definitely not "no changes"
-    if (/##\s*File:/i.test(content)) {
+    // Check if response contains diff changes (--- a/ and +++ b/ pattern)
+    // If it has diffs, it's definitely not "no changes"
+    if (/^---\s+a\//m.test(content) && /^\+\+\+\s+b\//m.test(content)) {
       return false;
     }
 
