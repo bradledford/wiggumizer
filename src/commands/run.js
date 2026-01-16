@@ -185,13 +185,13 @@ async function runOnce(prompt, config, quiet, resumeState = null) {
           SummaryGenerator.displaySummary(summary);
         }
 
-        // Write CHANGELOG.md
-        const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
-        SummaryGenerator.writeChangelog(summary, changelogPath);
+        // Write SESSION-SUMMARY.md
+        const summaryPath = path.join(process.cwd(), 'SESSION-SUMMARY.md');
+        SummaryGenerator.writeSessionSummary(summary, summaryPath);
 
         if (!quiet) {
-          console.log(chalk.green('✓ Generated CHANGELOG.md'));
-          console.log(chalk.dim(`  ${changelogPath}`));
+          console.log(chalk.green('✓ Generated SESSION-SUMMARY.md'));
+          console.log(chalk.dim(`  ${summaryPath}`));
           console.log();
           console.log(chalk.dim('  Use this for:'));
           console.log(chalk.dim('  - Commit messages'));
@@ -202,7 +202,7 @@ async function runOnce(prompt, config, quiet, resumeState = null) {
       } catch (summaryError) {
         // Don't fail the whole run if summary generation fails
         if (config.verbose && !quiet) {
-          console.error(chalk.yellow('⚠ Failed to generate CHANGELOG:'), summaryError.message);
+          console.error(chalk.yellow('⚠ Failed to generate session summary:'), summaryError.message);
         }
       }
     }

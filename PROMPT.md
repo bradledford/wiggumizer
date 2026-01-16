@@ -140,10 +140,13 @@ The documentation extensively describes features that **don't exist**:
 **Start here (highest impact):**
 
 1. ~~**Fix file-selector.js priority bug**~~ ✅ Fixed with tier-based system
-2. **Audit docs/cli-reference/commands/run.md** - Mark unimplemented options clearly
-3. ~~**Implement --watch mode**~~ ✅ Already implemented in commands/run.js
-4. **Document --auto-commit** - Exists but undocumented
-5. **Create docs/ROADMAP.md** - Show users what's real vs planned
+2. **⚠️ CRITICAL: Fix installation.md** - Docs promise 5 installation methods but NONE work (see Phase 7)
+   - Immediate action: Add status badges to installation.md (✅/🚧)
+   - Quick win: Publish to npm (package.json is ready)
+3. **Audit docs/cli-reference/commands/run.md** - Mark unimplemented options clearly
+4. ~~**Implement --watch mode**~~ ✅ Already implemented in commands/run.js
+5. **Document --auto-commit** - Exists but undocumented
+6. **Create docs/ROADMAP.md** - Show users what's real vs planned
 
 ---
 
@@ -309,6 +312,129 @@ Ralph's approach complements Wiggumizer rather than replacing it:
 - Let users choose based on use case:
   - Convergence mode: Refactoring, bug fixes, iterative improvements
   - Story mode: Feature development, PRD execution, structured tasks
+
+## Phase 7: Installation & Distribution Infrastructure
+
+**Goal**: Implement the installation methods documented in [installation.md](docs/getting-started/installation.md) which currently don't exist.
+
+### Current State
+- ✅ package.json exists with proper bin configuration
+- ❌ NOT published to npm registry (404 error)
+- ❌ NO Python packaging (no setup.py or pyproject.toml)
+- ❌ NO Rust packaging (no Cargo.toml)
+- ❌ NO Homebrew formula
+- ❌ NO binary release automation
+- ❌ NO GitHub Actions workflow for releases
+
+The docs promise 5 installation methods, but **NONE are functional**.
+
+### A. npm Publishing (Highest Priority)
+- [ ] Review package.json for npm publishing best practices
+  - [ ] Add appropriate files/directories to .npmignore
+  - [ ] Verify bin/wiggumize.js has proper shebang
+  - [ ] Add prepublishOnly script to run tests
+  - [ ] Consider adding postinstall script for setup
+- [ ] Create npm publishing workflow
+  - [ ] Add .github/workflows/npm-publish.yml
+  - [ ] Configure npm token as GitHub secret
+  - [ ] Trigger on git tags (v*.*.*)
+  - [ ] Run tests before publishing
+- [ ] Publish initial version to npm
+  - [ ] Test with `npm pack` locally first
+  - [ ] Publish with `npm publish --access public`
+  - [ ] Verify `npm install -g wiggumizer` works
+  - [ ] Test `npx wiggumizer --help` works
+
+### B. Binary Releases (Cross-Platform)
+- [ ] Set up automated binary builds using pkg or nexe
+  - [ ] Research best tool: pkg vs nexe vs vercel/ncc
+  - [ ] Create build script to generate platform binaries
+  - [ ] Target platforms: macOS (x64, arm64), Linux (x64), Windows (x64)
+- [ ] Create GitHub Actions release workflow
+  - [ ] Add .github/workflows/release.yml
+  - [ ] Build binaries for all platforms
+  - [ ] Create GitHub Release on tag
+  - [ ] Upload platform binaries as release assets
+  - [ ] Generate checksums for verification
+- [ ] Update installation.md binary download instructions
+  - [ ] Link to actual releases page
+  - [ ] Document binary verification steps
+
+### C. Python Packaging (pip)
+**Decision needed**: Is Python packaging worth the effort?
+- [ ] Determine if Python wrapper adds value
+  - Python wrapper would shell out to Node.js binary
+  - Adds complexity and another dependency
+  - Consider: just remove from docs instead?
+- [ ] If implementing:
+  - [ ] Create setup.py or pyproject.toml
+  - [ ] Add Python wrapper script
+  - [ ] Configure PyPI publishing
+  - [ ] Test with `pip install wiggumizer`
+- [ ] Alternative: Remove pip installation from docs
+
+### D. Rust Packaging (cargo)
+**Decision needed**: Rewrite in Rust or remove from docs?
+- [ ] Determine Rust implementation strategy
+  - Full Rust rewrite is massive effort
+  - Rust wrapper calling Node binary is awkward
+  - Consider: remove from docs for now?
+- [ ] If implementing Rust wrapper:
+  - [ ] Create Cargo.toml
+  - [ ] Add Rust wrapper that spawns Node process
+  - [ ] Publish to crates.io
+- [ ] Alternative: Remove cargo installation from docs (recommended)
+
+### E. Homebrew Formula
+- [ ] Create Homebrew tap repository
+  - [ ] Create github.com/bradledford/homebrew-wiggumizer
+  - [ ] Add Formula/wiggumizer.rb
+  - [ ] Formula should install from npm or binary
+- [ ] Configure formula
+  - [ ] Set up formula to install Node binary if using npm
+  - [ ] Or download pre-built binary from releases
+  - [ ] Add dependencies (Node.js if needed)
+  - [ ] Test installation on macOS
+- [ ] Update installation.md with correct tap name
+  - [ ] Change from `wiggumizer/tap` to actual repo
+
+### F. Installation Documentation Cleanup
+- [ ] Update installation.md to mark status of each method
+  - [ ] Add "✅ Available" or "🚧 Coming Soon" badges
+  - [ ] Remove or clearly mark unimplemented methods
+  - [ ] Add "Currently in Development" section
+- [ ] Create installation verification checklist
+  - [ ] Document how to verify each installation method works
+  - [ ] Add troubleshooting for common issues
+- [ ] Update system requirements
+  - [ ] Clarify Node.js is required (unless using standalone binary)
+  - [ ] Remove Python/Rust requirements if not implementing
+
+### Implementation Priority
+
+**Phase 1 (Do First):**
+1. **npm Publishing** - Easiest, most valuable (Node.js ecosystem)
+2. **Binary Releases** - Second most valuable (no Node.js required)
+3. **Update Docs** - Mark methods as available/coming soon
+
+**Phase 2 (Consider):**
+4. **Homebrew Formula** - Nice for macOS users
+5. **Python pip** - Only if there's demand
+
+**Phase 3 (Probably Skip):**
+6. **Rust cargo** - Not worth it unless rewriting in Rust
+
+### Recommended Approach
+1. Publish to npm immediately (package.json is ready)
+2. Set up binary releases for standalone installation
+3. Add Homebrew formula (uses npm or binary under the hood)
+4. **Remove** pip and cargo from docs (mark as "future consideration")
+5. Update installation.md to reflect reality
+
+This gives users 3 real installation methods:
+- `npm install -g wiggumizer` (developers with Node.js)
+- Download binary (anyone, no Node.js needed)
+- `brew install wiggumizer` (macOS users)
 
 ## Meta-Notes
 

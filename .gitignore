@@ -14,5 +14,5 @@ coverage/
 .wiggumizer.yml
 
 # Generated Documentation
-CHANGELOG.md
+SESSION-SUMMARY.md
 PROMPT.md

@@ -1,6 +1,6 @@
 /**
  * Summary Generator - Creates documentation for changes made by Wiggumizer
- * Useful for commit messages, PR descriptions, and JIRA updates
+ * Generates session summaries, commit messages, PR descriptions, and JIRA updates
  */
 
 const fs = require('fs');
@@ -295,13 +295,13 @@ class SummaryGenerator {
   }
 
   /**
-   * Write CHANGELOG.md to the project root
+   * Write SESSION-SUMMARY.md to the project root
    */
-  static writeChangelog(summary, outputPath) {
+  static writeSessionSummary(summary, outputPath) {
     const lines = [];
 
     // Header
-    lines.push('# Wiggumizer Change Summary');
+    lines.push('# Wiggumizer Session Summary');
     lines.push('');
     lines.push(`*Generated on ${new Date().toISOString()}*`);
     lines.push('');

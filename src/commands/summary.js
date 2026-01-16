@@ -5,7 +5,7 @@ const SummaryGenerator = require('../summary-generator');
 
 async function summaryCommand(options) {
   console.log(chalk.bold.blue('\n📝 Generating Change Summary\n'));
-  console.log(chalk.dim('Note: CHANGELOG.md is auto-generated after "wiggumize run"'));
+  console.log(chalk.dim('Note: SESSION-SUMMARY.md is auto-generated after "wiggumize run"'));
   console.log(chalk.dim('Use this command to regenerate from a previous session.\n'));
 
   // Find session directory
@@ -88,12 +88,12 @@ async function summaryCommand(options) {
     // Display summary
     SummaryGenerator.displaySummary(summary);
 
-    // Write CHANGELOG.md
-    const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
-    SummaryGenerator.writeChangelog(summary, changelogPath);
+    // Write SESSION-SUMMARY.md
+    const summaryPath = path.join(process.cwd(), 'SESSION-SUMMARY.md');
+    SummaryGenerator.writeSessionSummary(summary, summaryPath);
 
-    console.log(chalk.green('✓ Generated CHANGELOG.md'));
-    console.log(chalk.dim(`  ${changelogPath}`));
+    console.log(chalk.green('✓ Generated SESSION-SUMMARY.md'));
+    console.log(chalk.dim(`  ${summaryPath}`));
     console.log();
 
     // Show specific outputs

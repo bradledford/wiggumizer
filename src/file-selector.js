@@ -133,14 +133,15 @@ class FileSelector {
 
     if (this.excludePatterns.length > 0) {
       filtered = filtered.filter(file => {
-        return !micromatch.isMatch(file, this.excludePatterns);
+        // Use matchBase to allow patterns like '*.test.js' to match at any level
+        return !micromatch.isMatch(file, this.excludePatterns, { matchBase: true });
       });
     }
 
     // Apply include patterns
     if (this.includePatterns.length > 0 && this.includePatterns[0] !== '**/*') {
       filtered = filtered.filter(file => {
-        return micromatch.isMatch(file, this.includePatterns);
+        return micromatch.isMatch(file, this.includePatterns, { matchBase: true });
       });
     }
 
@@ -172,9 +173,10 @@ class FileSelector {
   calculatePriority(file, stats) {
     const ext = path.extname(file);
     const basename = path.basename(file);
-    
-    // PROMPT.md is ALWAYS first - essential for Ralph loop
-    if (basename === 'PROMPT.md') {
+
+    // PROMPT.md at root is ALWAYS first - essential for Ralph loop
+    // Nested PROMPT.md files are treated as regular markdown
+    if (basename === 'PROMPT.md' && file === 'PROMPT.md') {
       return 300;
     }
     

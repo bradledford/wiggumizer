@@ -19,7 +19,7 @@ When you run `wiggumize run`, the AI examines:
 1. **Current PROMPT.md** - Your instructions and goals
 2. **Git history** - `git log` shows what changed and when
 3. **`.ralph-notes.md`** - Notes the AI left for itself in previous iterations
-4. **CHANGELOG.md** - Summary of completed work
+4. **SESSION-SUMMARY.md** - Summary of last run's work
 5. **Current code state** - The actual files as they exist now
 
 This means the AI can pick up where it left off **even if you don't tell it what happened**.
@@ -107,7 +107,7 @@ wiggumize run
 # Runs for 20 iterations, converges
 
 # Review what was done
-cat CHANGELOG.md
+cat SESSION-SUMMARY.md
 cat .ralph-notes.md  # AI's notes about what it learned
 
 # Commit phase 1
@@ -163,7 +163,7 @@ git log --oneline -10
 cat .ralph-notes.md
 
 # What was the last summary?
-cat CHANGELOG.md
+cat SESSION-SUMMARY.md
 
 # What was converged?
 ls -lt .wiggumizer/iterations/
@@ -336,7 +336,7 @@ Each session builds on the previous work through:
 - ✅ **Auto-updates (Wiggumizer modifies these files):**
   - **PROMPT.md checkboxes** - `- [ ]` becomes `- [✅]` as tasks complete
   - **.ralph-notes.md** - AI leaves breadcrumb notes for itself
-  - **CHANGELOG.md** - Summary of all changes made
+  - **SESSION-SUMMARY.md** - Summary of last run (commit messages, PR templates)
 - ✋ **Manual control (You edit these):**
   - **PROMPT.md core content** - Goals, instructions, new tasks
   - **What to work on next** - You decide direction between sessions

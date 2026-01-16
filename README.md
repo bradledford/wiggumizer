@@ -64,7 +64,7 @@ Automatically recognizes when code has reached the desired state. No more manual
 Git integration, syntax validation, test execution, automatic backups. Safe by default.
 
 ### 📝 Change Documentation
-Automatic CHANGELOG generation with commit messages, PR descriptions, and JIRA updates. Link changes to issues with YAML metadata.
+Automatic session summary generation with commit messages, PR descriptions, and JIRA updates. Link changes to issues with YAML metadata.
 
 ### 🧠 Self-Discovery Through Iteration
 Unlike other tools that "tell" the AI what was done, Wiggumizer implements the pure Ralph philosophy:
@@ -112,7 +112,7 @@ wiggumize run
 **Automatic** (Wiggumizer modifies these files):
 - ✅ **PROMPT.md checkboxes** - Wiggumizer directly edits PROMPT.md to change `- [ ]` → `- [✅]` as work completes
 - ✅ **`.ralph-notes.md`** - AI leaves notes for next iteration
-- ✅ **`CHANGELOG.md`** - Summary of changes
+- ✅ **`SESSION-SUMMARY.md`** - Summary of last run (commit messages, PR descriptions)
 - ✅ **`.wiggumizer/iterations/`** - Detailed logs
 
 **Manual** (You control):

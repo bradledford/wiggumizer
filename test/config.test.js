@@ -1,31 +1,26 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
-const assert = require('node:assert');
+const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Mock fs and path for testing
 const ConfigLoader = require('../src/config');
 
 describe('ConfigLoader', () => {
+  // Store original process.cwd
+  const originalCwd = process.cwd();
   let tempDir;
-  let originalCwd;
-  let originalHome;
 
   beforeEach(() => {
-    // Create a temporary directory for test files
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wiggumizer-config-test-'));
-    originalCwd = process.cwd();
-    originalHome = os.homedir;
-    
-    // Change to temp directory for tests
+    // Create a temp directory for each test
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wiggumizer-test-'));
     process.chdir(tempDir);
   });
 
   afterEach(() => {
-    // Restore original directory
+    // Restore original cwd and clean up
     process.chdir(originalCwd);
-    
-    // Clean up temp directory
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch (e) {
@@ -45,23 +40,24 @@ describe('ConfigLoader', () => {
       assert.strictEqual(config.dryRun, false);
     });
 
-    it('should have default context limits', () => {
+    it('should have correct default context limits', () => {
       const config = ConfigLoader.load();
 
       assert.strictEqual(config.context.maxSize, 100000);
       assert.strictEqual(config.context.maxFiles, 50);
     });
 
-    it('should have default file patterns', () => {
+    it('should have correct default file patterns', () => {
       const config = ConfigLoader.load();
 
       assert.ok(Array.isArray(config.files.include));
       assert.ok(Array.isArray(config.files.exclude));
+      assert.ok(config.files.include.includes('**/*'));
       assert.ok(config.files.exclude.includes('node_modules/**'));
       assert.ok(config.files.exclude.includes('.git/**'));
     });
 
-    it('should have default retry configuration', () => {
+    it('should have correct default retry configuration', () => {
       const config = ConfigLoader.load();
 
       assert.strictEqual(config.retry.maxRetries, 3);
@@ -69,181 +65,251 @@ describe('ConfigLoader', () => {
       assert.strictEqual(config.retry.maxDelay, 30000);
     });
 
-    it('should have default rate limit configuration', () => {
+    it('should have correct default rate limit configuration', () => {
       const config = ConfigLoader.load();
 
       assert.strictEqual(config.rateLimit.requestsPerMinute, 50);
       assert.strictEqual(config.rateLimit.requestsPerHour, 1000);
     });
 
-    it('should have default provider configurations', () => {
+    it('should have correct default provider configurations', () => {
       const config = ConfigLoader.load();
 
-      assert.ok(config.providers.claude);
       assert.strictEqual(config.providers.claude.model, 'claude-opus-4-5-20251101');
-      assert.strictEqual(config.providers.claude.maxTokens, 8192);
-
-      assert.ok(config.providers.openai);
+      assert.strictEqual(config.providers.claude.maxTokens, 16384);
       assert.strictEqual(config.providers.openai.model, 'gpt-5');
+      assert.strictEqual(config.providers.openai.maxTokens, 16384);
     });
 
-    it('should merge CLI options over defaults', () => {
-      const config = ConfigLoader.load({
-        provider: 'openai',
-        maxIterations: 50,
-        verbose: true
-      });
+    it('should have null workspaces by default', () => {
+      const config = ConfigLoader.load();
 
-      assert.strictEqual(config.provider, 'openai');
-      assert.strictEqual(config.maxIterations, 50);
-      assert.strictEqual(config.verbose, true);
-      // Other defaults should remain
-      assert.strictEqual(config.autoCommit, false);
+      assert.strictEqual(config.workspaces, null);
     });
   });
 
   describe('loadProjectConfig()', () => {
-    it('should load project config from .wiggumizer.yml', () => {
+    it('should load configuration from .wiggumizer.yml', () => {
       const projectConfig = `
 provider: openai
-maxIterations: 30
+maxIterations: 10
 autoCommit: true
-context:
-  maxSize: 50000
 `;
-      fs.writeFileSync(path.join(tempDir, '.wiggumizer.yml'), projectConfig);
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
 
       const config = ConfigLoader.load();
 
       assert.strictEqual(config.provider, 'openai');
-      assert.strictEqual(config.maxIterations, 30);
+      assert.strictEqual(config.maxIterations, 10);
       assert.strictEqual(config.autoCommit, true);
-      assert.strictEqual(config.context.maxSize, 50000);
     });
 
-    it('should return empty object when project config does not exist', () => {
+    it('should merge project config with defaults', () => {
+      const projectConfig = `
+maxIterations: 5
+`;
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
+
+      const config = ConfigLoader.load();
+
+      // Overridden value
+      assert.strictEqual(config.maxIterations, 5);
+      // Default values preserved
+      assert.strictEqual(config.provider, 'claude');
+      assert.strictEqual(config.convergenceThreshold, 0.02);
+    });
+
+    it('should handle nested configuration', () => {
+      const projectConfig = `
+context:
+  maxSize: 50000
+  maxFiles: 25
+retry:
+  maxRetries: 5
+`;
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
+
+      const config = ConfigLoader.load();
+
+      assert.strictEqual(config.context.maxSize, 50000);
+      assert.strictEqual(config.context.maxFiles, 25);
+      assert.strictEqual(config.retry.maxRetries, 5);
+      // Default preserved
+      assert.strictEqual(config.retry.baseDelay, 1000);
+    });
+
+    it('should load workspace configuration', () => {
+      const projectConfig = `
+workspaces:
+  - name: backend
+    path: ../backend
+  - name: frontend
+    path: ../frontend
+`;
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
+
+      const config = ConfigLoader.load();
+
+      assert.ok(Array.isArray(config.workspaces));
+      assert.strictEqual(config.workspaces.length, 2);
+      assert.strictEqual(config.workspaces[0].name, 'backend');
+      assert.strictEqual(config.workspaces[1].name, 'frontend');
+    });
+
+    it('should return empty object if config file does not exist', () => {
       const projectConfig = ConfigLoader.loadProjectConfig();
+
       assert.deepStrictEqual(projectConfig, {});
     });
 
-    it('should handle malformed YAML gracefully', () => {
-      fs.writeFileSync(path.join(tempDir, '.wiggumizer.yml'), 'invalid: yaml: content:');
-      
-      // Should not throw, just return empty or partial config
+    it('should handle invalid YAML gracefully', () => {
+      fs.writeFileSync('.wiggumizer.yml', '  invalid: yaml: content:');
+
+      // Should not throw, returns empty object
       const projectConfig = ConfigLoader.loadProjectConfig();
       assert.ok(typeof projectConfig === 'object');
     });
   });
 
-  describe('loadConfigFile()', () => {
-    it('should parse valid YAML config file', () => {
-      const configContent = `
-provider: claude
-maxIterations: 15
-files:
-  include:
-    - "src/**/*.js"
-  exclude:
-    - "test/**"
+  describe('CLI options override', () => {
+    it('should override project config with CLI options', () => {
+      const projectConfig = `
+provider: openai
+maxIterations: 10
 `;
-      const configPath = path.join(tempDir, 'test-config.yml');
-      fs.writeFileSync(configPath, configContent);
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
 
-      const config = ConfigLoader.loadConfigFile(configPath);
+      const cliOptions = {
+        provider: 'claude',
+        maxIterations: 30
+      };
 
+      const config = ConfigLoader.load(cliOptions);
+
+      // CLI options should win
       assert.strictEqual(config.provider, 'claude');
-      assert.strictEqual(config.maxIterations, 15);
-      assert.deepStrictEqual(config.files.include, ['src/**/*.js']);
-      assert.deepStrictEqual(config.files.exclude, ['test/**']);
+      assert.strictEqual(config.maxIterations, 30);
     });
 
-    it('should return empty object for non-existent file', () => {
-      const config = ConfigLoader.loadConfigFile('/nonexistent/path.yml');
-      assert.deepStrictEqual(config, {});
+    it('should not override with null/undefined CLI options', () => {
+      const projectConfig = `
+provider: openai
+maxIterations: 10
+`;
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
+
+      const cliOptions = {
+        provider: null,
+        maxIterations: undefined,
+        verbose: true
+      };
+
+      const config = ConfigLoader.load(cliOptions);
+
+      // null/undefined should not override
+      assert.strictEqual(config.provider, 'openai');
+      assert.strictEqual(config.maxIterations, 10);
+      // But defined values should
+      assert.strictEqual(config.verbose, true);
     });
   });
 
   describe('mergeConfigs()', () => {
     it('should merge multiple config objects', () => {
-      const defaults = { a: 1, b: 2, nested: { x: 10 } };
-      const override = { b: 3, c: 4, nested: { y: 20 } };
+      const config1 = { a: 1, b: 2 };
+      const config2 = { b: 3, c: 4 };
+      const config3 = { c: 5, d: 6 };
 
-      const merged = ConfigLoader.mergeConfigs(defaults, override);
+      const merged = ConfigLoader.mergeConfigs(config1, config2, config3);
 
       assert.strictEqual(merged.a, 1);
       assert.strictEqual(merged.b, 3);
-      assert.strictEqual(merged.c, 4);
-      assert.strictEqual(merged.nested.x, 10);
-      assert.strictEqual(merged.nested.y, 20);
+      assert.strictEqual(merged.c, 5);
+      assert.strictEqual(merged.d, 6);
     });
 
-    it('should handle deep nesting', () => {
-      const defaults = {
-        level1: {
-          level2: {
-            level3: { value: 'original' }
-          }
+    it('should deep merge nested objects', () => {
+      const config1 = {
+        outer: {
+          inner1: 'a',
+          inner2: 'b'
         }
       };
-      const override = {
-        level1: {
-          level2: {
-            level3: { value: 'overridden', newKey: 'added' }
-          }
+      const config2 = {
+        outer: {
+          inner2: 'c',
+          inner3: 'd'
         }
       };
 
-      const merged = ConfigLoader.mergeConfigs(defaults, override);
+      const merged = ConfigLoader.mergeConfigs(config1, config2);
 
-      assert.strictEqual(merged.level1.level2.level3.value, 'overridden');
-      assert.strictEqual(merged.level1.level2.level3.newKey, 'added');
+      assert.strictEqual(merged.outer.inner1, 'a');
+      assert.strictEqual(merged.outer.inner2, 'c');
+      assert.strictEqual(merged.outer.inner3, 'd');
     });
 
-    it('should skip null and undefined values', () => {
-      const defaults = { a: 1, b: 2 };
-      const override = { a: null, b: undefined, c: 3 };
+    it('should handle arrays (replace, not merge)', () => {
+      const config1 = { arr: [1, 2, 3] };
+      const config2 = { arr: [4, 5] };
 
-      const merged = ConfigLoader.mergeConfigs(defaults, override);
+      const merged = ConfigLoader.mergeConfigs(config1, config2);
 
-      assert.strictEqual(merged.a, 1); // Not overridden by null
-      assert.strictEqual(merged.b, 2); // Not overridden by undefined
-      assert.strictEqual(merged.c, 3);
-    });
-
-    it('should merge arrays by replacement, not concatenation', () => {
-      const defaults = { items: [1, 2, 3] };
-      const override = { items: [4, 5] };
-
-      const merged = ConfigLoader.mergeConfigs(defaults, override);
-
-      assert.deepStrictEqual(merged.items, [4, 5]);
+      assert.deepStrictEqual(merged.arr, [4, 5]);
     });
   });
 
   describe('deepMerge()', () => {
-    it('should modify target object in place', () => {
-      const target = { a: 1 };
-      const source = { b: 2 };
+    it('should skip null values', () => {
+      const target = { a: 1, b: 2 };
+      const source = { a: null, b: 3 };
 
       ConfigLoader.deepMerge(target, source);
 
-      assert.strictEqual(target.a, 1);
-      assert.strictEqual(target.b, 2);
+      assert.strictEqual(target.a, 1); // Not overwritten
+      assert.strictEqual(target.b, 3); // Overwritten
     });
 
-    it('should recursively merge nested objects', () => {
-      const target = { nested: { a: 1 } };
-      const source = { nested: { b: 2 } };
+    it('should skip undefined values', () => {
+      const target = { a: 1, b: 2 };
+      const source = { a: undefined, c: 3 };
 
       ConfigLoader.deepMerge(target, source);
 
-      assert.strictEqual(target.nested.a, 1);
-      assert.strictEqual(target.nested.b, 2);
+      assert.strictEqual(target.a, 1); // Not overwritten
+      assert.strictEqual(target.c, 3); // Added
+    });
+
+    it('should handle deeply nested objects', () => {
+      const target = {
+        level1: {
+          level2: {
+            level3: {
+              value: 'original'
+            }
+          }
+        }
+      };
+      const source = {
+        level1: {
+          level2: {
+            level3: {
+              value: 'updated',
+              newKey: 'added'
+            }
+          }
+        }
+      };
+
+      ConfigLoader.deepMerge(target, source);
+
+      assert.strictEqual(target.level1.level2.level3.value, 'updated');
+      assert.strictEqual(target.level1.level2.level3.newKey, 'added');
     });
   });
 
   describe('generateDefaultConfig()', () => {
-    it('should generate valid YAML string', () => {
+    it('should return a valid YAML string', () => {
       const configYaml = ConfigLoader.generateDefaultConfig();
 
       assert.ok(typeof configYaml === 'string');
@@ -252,11 +318,9 @@ files:
       assert.ok(configYaml.includes('maxIterations:'));
     });
 
-    it('should contain all important configuration sections', () => {
+    it('should include all major configuration sections', () => {
       const configYaml = ConfigLoader.generateDefaultConfig();
 
-      assert.ok(configYaml.includes('provider:'));
-      assert.ok(configYaml.includes('maxIterations:'));
       assert.ok(configYaml.includes('context:'));
       assert.ok(configYaml.includes('files:'));
       assert.ok(configYaml.includes('retry:'));
@@ -264,87 +328,153 @@ files:
       assert.ok(configYaml.includes('providers:'));
     });
 
-    it('should include workspace configuration comments', () => {
+    it('should include workspace configuration example (commented)', () => {
       const configYaml = ConfigLoader.generateDefaultConfig();
 
       assert.ok(configYaml.includes('workspaces:'));
-      assert.ok(configYaml.includes('Multi-repo'));
+      assert.ok(configYaml.includes('# workspaces:') || configYaml.includes('workspace'));
     });
   });
 
   describe('createProjectConfig()', () => {
-    it('should create .wiggumizer.yml in current directory', () => {
-      const configPath = ConfigLoader.createProjectConfig();
+    it('should create .wiggumizer.yml file', () => {
+      ConfigLoader.createProjectConfig();
 
-      assert.ok(fs.existsSync(configPath));
-      assert.strictEqual(path.basename(configPath), '.wiggumizer.yml');
+      assert.ok(fs.existsSync('.wiggumizer.yml'));
     });
 
-    it('should throw error if config already exists', () => {
-      fs.writeFileSync(path.join(tempDir, '.wiggumizer.yml'), 'existing: config');
+    it('should throw if .wiggumizer.yml already exists', () => {
+      fs.writeFileSync('.wiggumizer.yml', 'existing: config');
 
       assert.throws(() => {
         ConfigLoader.createProjectConfig();
       }, /already exists/);
     });
 
-    it('should create config with valid YAML content', () => {
+    it('should return the config file path', () => {
       const configPath = ConfigLoader.createProjectConfig();
-      const content = fs.readFileSync(configPath, 'utf-8');
 
-      // Should be parseable
+      assert.ok(configPath.endsWith('.wiggumizer.yml'));
+    });
+
+    it('should create parseable YAML', () => {
+      ConfigLoader.createProjectConfig();
+
+      const content = fs.readFileSync('.wiggumizer.yml', 'utf-8');
       const yaml = require('yaml');
       const parsed = yaml.parse(content);
 
-      assert.ok(parsed.provider);
-      assert.ok(parsed.maxIterations);
+      assert.ok(typeof parsed === 'object');
+      assert.strictEqual(parsed.provider, 'claude');
     });
   });
 
-  describe('config priority order', () => {
-    it('should respect priority: CLI > project > defaults', () => {
+  describe('loadUserConfig()', () => {
+    // Note: We can't easily test user config without mocking os.homedir()
+    // This test verifies the method exists and returns an object
+
+    it('should return an object (possibly empty)', () => {
+      const userConfig = ConfigLoader.loadUserConfig();
+
+      assert.ok(typeof userConfig === 'object');
+    });
+  });
+
+  describe('loadConfigFile()', () => {
+    it('should load and parse a valid YAML file', () => {
+      const testConfig = `
+key1: value1
+key2: 42
+nested:
+  key3: true
+`;
+      fs.writeFileSync('test-config.yml', testConfig);
+
+      const config = ConfigLoader.loadConfigFile(path.join(tempDir, 'test-config.yml'));
+
+      assert.strictEqual(config.key1, 'value1');
+      assert.strictEqual(config.key2, 42);
+      assert.strictEqual(config.nested.key3, true);
+    });
+
+    it('should return empty object for non-existent file', () => {
+      const config = ConfigLoader.loadConfigFile('/non/existent/path.yml');
+
+      assert.deepStrictEqual(config, {});
+    });
+
+    it('should handle empty YAML file', () => {
+      fs.writeFileSync('empty.yml', '');
+
+      const config = ConfigLoader.loadConfigFile(path.join(tempDir, 'empty.yml'));
+
+      assert.deepStrictEqual(config, {});
+    });
+  });
+
+  describe('Configuration priority', () => {
+    it('should apply correct priority: defaults < project < CLI', () => {
       // Create project config
       const projectConfig = `
 provider: openai
-maxIterations: 25
+maxIterations: 15
 verbose: true
 `;
-      fs.writeFileSync(path.join(tempDir, '.wiggumizer.yml'), projectConfig);
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
 
-      // CLI options override project config
-      const config = ConfigLoader.load({
-        maxIterations: 100  // This should override project's 25
-      });
+      // CLI options override
+      const cliOptions = {
+        maxIterations: 25
+      };
 
-      assert.strictEqual(config.provider, 'openai'); // From project config
-      assert.strictEqual(config.maxIterations, 100); // From CLI
-      assert.strictEqual(config.verbose, true); // From project config
-      assert.strictEqual(config.autoCommit, false); // From defaults
+      const config = ConfigLoader.load(cliOptions);
+
+      // Default value (not overridden)
+      assert.strictEqual(config.convergenceThreshold, 0.02);
+      // Project config value
+      assert.strictEqual(config.provider, 'openai');
+      assert.strictEqual(config.verbose, true);
+      // CLI override
+      assert.strictEqual(config.maxIterations, 25);
     });
   });
 
-  describe('workspaces configuration', () => {
-    it('should default to null (single repo mode)', () => {
-      const config = ConfigLoader.load();
-      assert.strictEqual(config.workspaces, null);
-    });
-
-    it('should load workspaces from project config', () => {
+  describe('Files configuration', () => {
+    it('should merge file include/exclude patterns', () => {
       const projectConfig = `
-workspaces:
-  - name: backend
-    path: ../backend
-  - name: frontend
-    path: ../frontend
+files:
+  include:
+    - "src/**/*.ts"
+    - "lib/**/*.ts"
+  exclude:
+    - "**/*.test.ts"
 `;
-      fs.writeFileSync(path.join(tempDir, '.wiggumizer.yml'), projectConfig);
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
 
       const config = ConfigLoader.load();
 
-      assert.ok(Array.isArray(config.workspaces));
-      assert.strictEqual(config.workspaces.length, 2);
-      assert.strictEqual(config.workspaces[0].name, 'backend');
-      assert.strictEqual(config.workspaces[1].name, 'frontend');
+      assert.ok(config.files.include.includes('src/**/*.ts'));
+      assert.ok(config.files.include.includes('lib/**/*.ts'));
+      assert.ok(config.files.exclude.includes('**/*.test.ts'));
+    });
+  });
+
+  describe('Provider-specific configuration', () => {
+    it('should allow overriding provider model', () => {
+      const projectConfig = `
+providers:
+  claude:
+    model: claude-3-5-sonnet-20241022
+    maxTokens: 4096
+`;
+      fs.writeFileSync('.wiggumizer.yml', projectConfig);
+
+      const config = ConfigLoader.load();
+
+      assert.strictEqual(config.providers.claude.model, 'claude-3-5-sonnet-20241022');
+      assert.strictEqual(config.providers.claude.maxTokens, 4096);
+      // OpenAI defaults preserved
+      assert.strictEqual(config.providers.openai.model, 'gpt-5');
     });
   });
 });

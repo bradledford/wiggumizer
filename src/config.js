@@ -59,7 +59,7 @@ class ConfigLoader {
         },
         openai: {
           model: 'gpt-5',
-          maxTokens: 8192
+          maxTokens: 16384  // Increased from 8K to allow larger responses
         }
       }
     };
@@ -133,12 +133,27 @@ class ConfigLoader {
    */
   static deepMerge(target, source) {
     for (const key in source) {
-      if (source[key] === undefined || source[key] === null) {
-        continue; // Skip null/undefined values
+      if (source[key] === undefined) {
+        continue; // Skip undefined values
       }
 
-      if (source[key] instanceof Object && key in target && target[key] instanceof Object) {
-        // Recursively merge objects
+      // Skip null values if key already exists in target (don't override with null)
+      // But set null if key doesn't exist (preserve defaults with null values)
+      if (source[key] === null) {
+        if (!(key in target)) {
+          target[key] = null;
+        }
+        continue;
+      }
+
+      // Arrays should be replaced, not merged
+      if (Array.isArray(source[key])) {
+        target[key] = source[key];
+        continue;
+      }
+
+      if (source[key] instanceof Object && key in target && target[key] instanceof Object && target[key] !== null && !Array.isArray(target[key])) {
+        // Recursively merge objects (but not null or arrays)
         ConfigLoader.deepMerge(target[key], source[key]);
       } else {
         // Override value
@@ -226,11 +241,11 @@ rateLimit:
 providers:
   claude:
     model: claude-opus-4-5-20251101
-    maxTokens: 8192
+    maxTokens: 16384  # Claude Opus 4.5 supports up to 32K output tokens
 
   openai:
     model: gpt-5
-    maxTokens: 8192
+    maxTokens: 16384  # Increased from 8K to allow larger responses
 `;
   }
 
