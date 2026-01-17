@@ -11,7 +11,8 @@ async function runCommand(cliOptions) {
   const quiet = cliOptions.quiet || false;
 
   if (!quiet) {
-    console.log(chalk.bold.blue('\n🎯 Wiggumizer v0.3.1'));
+    const packageJson = require('../../package.json');
+    console.log(chalk.bold.blue('\n🎯 Wiggumizer v${packageJson.version}'));
     console.log(chalk.dim('Ralph Wiggum style AI coding automation\n'));
   }
 
