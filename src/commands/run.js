@@ -12,7 +12,7 @@ async function runCommand(cliOptions) {
 
   if (!quiet) {
     const packageJson = require('../../package.json');
-    console.log(chalk.bold.blue('\n🎯 Wiggumizer v${packageJson.version}'));
+    console.log(chalk.bold.blue(`\n🎯 Wiggumizer v${packageJson.version}`));
     console.log(chalk.dim('Ralph Wiggum style AI coding automation\n'));
   }
 
