@@ -140,6 +140,7 @@ class RalphLoop {
       this.iteration++;
 
       const spinner = ora(`Iteration ${this.iteration}/${this.maxIterations}`).start();
+      let heartbeat = null;
 
       try {
         // Get current codebase state
@@ -148,13 +149,46 @@ class RalphLoop {
         // Update file hashes for convergence detection
         const hashComparison = this.convergence.updateFileHashes(codebaseContext.files);
 
+        // Set up streaming output handler for all providers
+        // This shows real-time progress so users know it's not frozen
+        let lastOutputTime = Date.now();
+        const onOutput = (text) => {
+          lastOutputTime = Date.now();
+
+          // Extract the last meaningful line from the text
+          const lines = text.split('\n').filter(l => l.trim());
+          if (lines.length === 0) return;
+
+          const lastLine = lines[lines.length - 1].trim();
+
+          // Update spinner with the latest output
+          // Truncate if too long (max 80 chars)
+          const displayLine = lastLine.length > 80
+            ? lastLine.substring(0, 77) + '...'
+            : lastLine;
+
+          spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(displayLine)}`;
+        };
+
+        // Heartbeat: update spinner periodically even without output
+        // This prevents the appearance of being frozen
+        heartbeat = setInterval(() => {
+          const elapsed = Math.round((Date.now() - lastOutputTime) / 1000);
+          if (elapsed > 3) {
+            spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(`waiting for response... (${elapsed}s)`)}`;
+          }
+        }, 2000);
+
         // Send to AI provider (prompt stays constant - true Ralph philosophy)
+        // Always pass onOutput to show progress (not just in verbose mode)
         const response = await this.provider.iterate({
           prompt: this.prompt,
           context: codebaseContext,
-          iteration: this.iteration
+          iteration: this.iteration,
+          onOutput
         });
 
+        clearInterval(heartbeat);
         spinner.succeed(`Iteration ${this.iteration}/${this.maxIterations}`);
 
         // Check if there are changes
@@ -276,6 +310,7 @@ class RalphLoop {
         console.log();
 
       } catch (error) {
+        if (heartbeat) clearInterval(heartbeat);
         spinner.fail(`Iteration ${this.iteration} failed`);
 
         // Log error

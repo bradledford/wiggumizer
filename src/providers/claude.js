@@ -33,7 +33,7 @@ class ClaudeProvider {
     });
   }
 
-  async iterate({ prompt, context, iteration }) {
+  async iterate({ prompt, context, iteration, onOutput }) {
     // Build the message for Claude
     const systemPrompt = this.buildSystemPrompt();
     const userMessage = this.buildUserMessage(prompt, context, iteration);
@@ -43,30 +43,72 @@ class ClaudeProvider {
       // Wait for rate limit if needed
       await this.rateLimiter.waitIfNeeded();
 
-      // Make API call
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: this.maxTokens,
-        system: systemPrompt,
-        messages: [{
-          role: 'user',
-          content: userMessage
-        }]
-      });
+      // Use streaming API if onOutput callback provided
+      if (onOutput) {
+        let fullContent = '';
 
-      // Parse response
-      const content = response.content[0].text;
+        const stream = await this.client.messages.stream({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemPrompt,
+          messages: [{
+            role: 'user',
+            content: userMessage
+          }]
+        });
 
-      // Simple convergence detection: if Claude says "no changes" or similar
-      const hasChanges = !this.detectNoChanges(content);
+        // Process stream and call onOutput for each chunk
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+            const text = chunk.delta.text;
+            fullContent += text;
 
-      return {
-        hasChanges,
-        changes: content,
-        summary: this.extractSummary(content),
-        reasoning: this.extractReasoning(content),
-        raw: content
-      };
+            // Stream each line to the callback
+            const lines = text.split('\n');
+            for (const line of lines) {
+              if (line.trim()) {
+                onOutput(line);
+              }
+            }
+          }
+        }
+
+        // Simple convergence detection
+        const hasChanges = !this.detectNoChanges(fullContent);
+
+        return {
+          hasChanges,
+          changes: fullContent,
+          summary: this.extractSummary(fullContent),
+          reasoning: this.extractReasoning(fullContent),
+          raw: fullContent
+        };
+      } else {
+        // Non-streaming API call (original behavior)
+        const response = await this.client.messages.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemPrompt,
+          messages: [{
+            role: 'user',
+            content: userMessage
+          }]
+        });
+
+        // Parse response
+        const content = response.content[0].text;
+
+        // Simple convergence detection: if Claude says "no changes" or similar
+        const hasChanges = !this.detectNoChanges(content);
+
+        return {
+          hasChanges,
+          changes: content,
+          summary: this.extractSummary(content),
+          reasoning: this.extractReasoning(content),
+          raw: content
+        };
+      }
     }, `Claude API call (iteration ${iteration})`);
   }
 
