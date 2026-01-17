@@ -49,13 +49,12 @@ class ClaudeCliProvider {
     const args = [
       '-p',
       '--model', this.model,
-      '--max-tokens', this.maxTokens.toString(),
       '--system-prompt', systemPrompt,
       userMessage
     ];
 
     if (this.verbose) {
-      console.log(chalk.dim(`\nExecuting: claude ${args.slice(0, 6).join(' ')} [user message]`));
+      console.log(chalk.dim(`\nExecuting: claude ${args.slice(0, 4).join(' ')} [user message]`));
     }
 
     return new Promise((resolve, reject) => {
