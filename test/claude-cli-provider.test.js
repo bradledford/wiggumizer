@@ -272,6 +272,18 @@ Fixed stuff`;
       // or without having the actual CLI installed
       // The method is tested implicitly through iterate() in integration tests
     });
+
+    it('should include --allowedTools flag for file editing permissions', () => {
+      // We can verify the args by checking the source code structure
+      // The executeClaudeCommand method should include Edit,Write,Read,Glob,Grep,Bash tools
+      const sourceCode = provider.executeClaudeCommand.toString();
+
+      // Verify the method includes the allowedTools argument
+      assert.ok(
+        sourceCode.includes('--allowedTools') || sourceCode.includes('allowedTools'),
+        'executeClaudeCommand should include --allowedTools flag'
+      );
+    });
   });
 
   describe('iterate', () => {
