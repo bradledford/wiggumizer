@@ -140,6 +140,7 @@ class RalphLoop {
       this.iteration++;
 
       const spinner = ora(`Iteration ${this.iteration}/${this.maxIterations}`).start();
+      let heartbeat = null;
 
       try {
         // Get current codebase state
@@ -148,13 +149,58 @@ class RalphLoop {
         // Update file hashes for convergence detection
         const hashComparison = this.convergence.updateFileHashes(codebaseContext.files);
 
+        // Set up streaming output handler for all providers
+        // This shows real-time progress so users know it's not frozen
+        let lastOutputTime = Date.now();
+        let outputBuffer = '';
+        let lastDisplayedSentence = '';
+
+        const onOutput = (text) => {
+          lastOutputTime = Date.now();
+          outputBuffer += text;
+
+          // Look for complete sentences (ending with . ! ? or newline)
+          // We batch output until we have a meaningful chunk to display
+          const sentenceMatch = outputBuffer.match(/^([\s\S]*?[.!?\n])\s*/);
+
+          if (sentenceMatch) {
+            const completeSentence = sentenceMatch[1].trim();
+            // Remove the matched sentence from buffer
+            outputBuffer = outputBuffer.slice(sentenceMatch[0].length);
+
+            // Only update if we have meaningful content
+            if (completeSentence && completeSentence !== lastDisplayedSentence) {
+              lastDisplayedSentence = completeSentence;
+
+              // Truncate if too long (max 80 chars)
+              const displayLine = completeSentence.length > 80
+                ? completeSentence.substring(0, 77) + '...'
+                : completeSentence;
+
+              spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(displayLine)}`;
+            }
+          }
+        };
+
+        // Heartbeat: update spinner periodically even without output
+        // This prevents the appearance of being frozen
+        heartbeat = setInterval(() => {
+          const elapsed = Math.round((Date.now() - lastOutputTime) / 1000);
+          if (elapsed > 3) {
+            spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(`waiting for response... (${elapsed}s)`)}`;
+          }
+        }, 2000);
+
         // Send to AI provider (prompt stays constant - true Ralph philosophy)
+        // Always pass onOutput to show progress (not just in verbose mode)
         const response = await this.provider.iterate({
           prompt: this.prompt,
           context: codebaseContext,
-          iteration: this.iteration
+          iteration: this.iteration,
+          onOutput
         });
 
+        clearInterval(heartbeat);
         spinner.succeed(`Iteration ${this.iteration}/${this.maxIterations}`);
 
         // Check if there are changes
@@ -276,6 +322,7 @@ class RalphLoop {
         console.log();
 
       } catch (error) {
+        if (heartbeat) clearInterval(heartbeat);
         spinner.fail(`Iteration ${this.iteration} failed`);
 
         // Log error

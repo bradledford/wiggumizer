@@ -12,14 +12,14 @@ const program = new Command();
 program
   .name('wiggumize')
   .description('Ralph Wiggum style AI coding automation')
-  .version('0.3.1');
+  .version(require('../package.json').version);
 
 // Run command - the core of Wiggumizer
 program
   .command('run')
   .description('Run a Ralph loop to iteratively refine code')
   .option('-p, --prompt <file>', 'Prompt file to use', 'PROMPT.md')
-  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER || 'claude')
+  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER)
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('-q, --quiet', 'Minimal output (only errors and final result)')
@@ -164,7 +164,7 @@ multiCommand
   .command('run')
   .description('Run Ralph loop across all configured workspaces')
   .option('-p, --prompt <file>', 'Prompt file to use', 'PROMPT.md')
-  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER || 'claude')
+  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER)
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('-q, --quiet', 'Minimal output')
