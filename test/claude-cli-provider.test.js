@@ -27,6 +27,13 @@ describe('ClaudeCliProvider', () => {
       assert.strictEqual(p.maxTokens, 8192);
       assert.strictEqual(p.verbose, true);
     });
+
+    it('should accept fast mode config', () => {
+      const p = new ClaudeCliProvider({
+        fast: true
+      });
+      assert.strictEqual(p.fast, true);
+    });
   });
 
   describe('buildSystemPrompt', () => {
@@ -43,6 +50,16 @@ describe('ClaudeCliProvider', () => {
       assert.ok(prompt.includes('## Reasoning:'));
       assert.ok(prompt.includes('## Summary:'));
       assert.ok(prompt.includes('## File:'));
+    });
+
+    it('should return condensed prompt in fast mode', () => {
+      const fastProvider = new ClaudeCliProvider({ fast: true });
+      const prompt = fastProvider.buildSystemPrompt();
+
+      assert.ok(prompt.includes('FAST MODE'));
+      assert.ok(prompt.includes('Be concise'));
+      // Fast mode prompt should be shorter
+      assert.ok(prompt.length < 2000, 'Fast mode prompt should be condensed');
     });
   });
 
@@ -62,8 +79,10 @@ describe('ClaudeCliProvider', () => {
 
       assert.ok(message.includes('Fix authentication bug'));
       assert.ok(message.includes('Iteration 1'));
-      assert.ok(message.includes('src/auth.js'));
-      assert.ok(message.includes('module.exports = {};'));
+      // ClaudeCliProvider does NOT include file contents - it relies on local filesystem tools
+      assert.ok(message.includes('commit abc123'));  // Git log is included
+      assert.ok(message.includes('M src/auth.js'));  // Git status is included
+      assert.ok(message.includes('Codebase Access'));  // Tool instructions
     });
 
     it('should handle multi-repo context', () => {
@@ -85,7 +104,8 @@ describe('ClaudeCliProvider', () => {
       assert.ok(message.includes('Workspace Configuration'));
       assert.ok(message.includes('backend'));
       assert.ok(message.includes('frontend'));
-      assert.ok(message.includes('[backend] src/api.js'));
+      // ClaudeCliProvider shows workspace path, not file path with workspace prefix
+      assert.ok(message.includes('[workspace-name]'));  // Shows format example
     });
 
     it('should include breadcrumbs if available', () => {
@@ -112,6 +132,25 @@ describe('ClaudeCliProvider', () => {
 
       assert.ok(message.includes('Recent Test Results'));
       assert.ok(message.includes('FAIL: 3 tests failed'));
+    });
+
+    it('should return condensed message in fast mode', () => {
+      const fastProvider = new ClaudeCliProvider({ fast: true });
+      const context = {
+        files: [],
+        gitLog: 'commit abc123\ncommit def456\ncommit ghi789\ncommit jkl012\ncommit mno345\ncommit pqr678',
+        breadcrumbs: 'A'.repeat(500),  // Long breadcrumbs
+        cwd: '/test'
+      };
+
+      const message = fastProvider.buildUserMessage('Task', context, 1);
+
+      // Fast mode should truncate git log to 5 entries
+      assert.ok(message.includes('Recent History'));
+      // Fast mode should truncate breadcrumbs
+      assert.ok(message.includes('Notes:'));
+      // Should be concise
+      assert.ok(message.includes('Make substantial progress'));
     });
   });
 

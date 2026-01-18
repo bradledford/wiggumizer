@@ -16,6 +16,7 @@ class ClaudeProvider {
     this.client = new Anthropic({ apiKey });
     this.model = config.model || 'claude-opus-4-5-20251101';
     this.maxTokens = config.maxTokens || 16384; // Claude Opus 4.5 supports up to 32K
+    this.fast = config.fast || false; // Fast mode for shorter prompts
 
     // Initialize error handler
     this.errorHandler = new ErrorHandler({
@@ -113,6 +114,40 @@ class ClaudeProvider {
   }
 
   buildSystemPrompt() {
+    if (this.fast) {
+      return `You are an autonomous code improvement agent in a Ralph loop.
+
+FAST MODE - Be concise:
+Each iteration: examine codebase → identify what's needed → make substantial progress.
+The prompt repeats until work is complete. Discover progress by reading files.
+
+OUTPUT FORMAT:
+## Reasoning:
+[Brief analysis of current state and what needs to be done]
+
+## Summary:
+[One line: what you're implementing/fixing]
+
+## Changes:
+\`\`\`diff
+--- a/path/to/file.js
++++ b/path/to/file.js
+@@ -10,7 +10,7 @@
+ context
+-old line
++new line
+ context
+\`\`\`
+
+RULES:
+- Use unified diff format (standard diff -u)
+- Include 3 lines context before/after changes
+- Output "NO CHANGES NEEDED" if goal achieved
+- Make substantial progress each iteration
+
+Read the codebase carefully. Build on your previous work.`;
+    }
+
     return `You are an autonomous code improvement agent in a Ralph loop - a self-directed iterative development system.
 
 THE RALPH PHILOSOPHY:
@@ -205,6 +240,11 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
     // Build a clean, constant prompt structure (true Ralph style)
     let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
 
+    // In fast mode, use condensed prompts for quicker responses
+    if (this.fast) {
+      return this.buildFastUserMessage(prompt, context, iteration);
+    }
+
     // Handle multi-repo workspace context
     if (context.isMultiRepo) {
       message += `# Workspace Configuration:\n`;
@@ -287,6 +327,57 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
       message += `Remember: Changes may span multiple repositories. Include workspace name in diff paths.\n`;
     }
     message += `Remember: You are building on your own prior work. The files show your progress.`;
+
+    return message;
+  }
+
+  buildFastUserMessage(prompt, context, iteration) {
+    let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
+
+    // Condensed context for fast mode
+    if (context.gitLog) {
+      message += `# Recent History:\n\`\`\`\n${context.gitLog.split('\n').slice(0, 5).join('\n')}\n\`\`\`\n\n`;
+    }
+
+    if (context.gitStatus) {
+      message += `# Status:\n\`\`\`\n${context.gitStatus}\n\`\`\`\n\n`;
+    }
+
+    if (context.breadcrumbs) {
+      message += `# Notes:\n${context.breadcrumbs.substring(0, 300)}...\n\n`;
+    }
+
+    message += `# Codebase:\n\n`;
+
+    // Include fewer files and truncate content in fast mode
+    const maxFiles = Math.min(context.files.length, 10);
+    for (let i = 0; i < maxFiles; i++) {
+      const file = context.files[i];
+      const lines = file.content.split('\n');
+
+      // Truncate large files to first 50 lines in fast mode
+      const truncatedLines = lines.slice(0, 50);
+      const numberedContent = truncatedLines.map((line, idx) => `${idx + 1}│${line}`).join('\n');
+
+      if (context.isMultiRepo) {
+        message += `## File: [${file.workspace}] ${file.path}\n\`\`\`\n${numberedContent}\n\`\`\`\n`;
+        if (lines.length > 50) {
+          message += `[... ${lines.length - 50} more lines]\n`;
+        }
+      } else {
+        message += `## File: ${file.path}\n\`\`\`\n${numberedContent}\n\`\`\`\n`;
+        if (lines.length > 50) {
+          message += `[... ${lines.length - 50} more lines]\n`;
+        }
+      }
+      message += `\n`;
+    }
+
+    if (context.files.length > maxFiles) {
+      message += `[... ${context.files.length - maxFiles} more files not shown in fast mode]\n\n`;
+    }
+
+    message += `Examine the codebase. Make substantial progress. Output unified diffs only.`;
 
     return message;
   }

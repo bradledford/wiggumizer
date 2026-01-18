@@ -477,4 +477,53 @@ providers:
       assert.strictEqual(config.providers.openai.model, 'gpt-5');
     });
   });
+
+  describe('Fast mode configuration', () => {
+    it('should have fast mode disabled by default', () => {
+      const config = ConfigLoader.load();
+
+      assert.strictEqual(config.fast, false);
+    });
+
+    it('should have fast mode provider configurations', () => {
+      const config = ConfigLoader.load();
+
+      assert.ok(config.fastMode);
+      assert.ok(config.fastMode.providers);
+      assert.ok(config.fastMode.providers.claude);
+      assert.ok(config.fastMode.providers['claude-cli']);
+      assert.ok(config.fastMode.providers.openai);
+    });
+
+    it('should have correct fast mode model defaults', () => {
+      const config = ConfigLoader.load();
+
+      // Fast mode should use Sonnet for Claude
+      assert.ok(config.fastMode.providers.claude.model.includes('sonnet'));
+      assert.ok(config.fastMode.providers['claude-cli'].model.includes('sonnet'));
+    });
+
+    it('should have reduced maxTokens in fast mode', () => {
+      const config = ConfigLoader.load();
+
+      // Fast mode should use 8192 tokens (half of normal)
+      assert.strictEqual(config.fastMode.providers.claude.maxTokens, 8192);
+      assert.strictEqual(config.fastMode.providers['claude-cli'].maxTokens, 8192);
+      assert.strictEqual(config.fastMode.providers.openai.maxTokens, 8192);
+    });
+
+    it('should have reduced maxIterations in fast mode', () => {
+      const config = ConfigLoader.load();
+
+      // Fast mode should default to 10 iterations (half of normal)
+      assert.strictEqual(config.fastMode.maxIterations, 10);
+    });
+
+    it('should include fast option in generated config', () => {
+      const configYaml = ConfigLoader.generateDefaultConfig();
+
+      assert.ok(configYaml.includes('fast:'));
+      assert.ok(configYaml.includes('--fast'));
+    });
+  });
 });

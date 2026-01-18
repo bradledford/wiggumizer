@@ -11,10 +11,11 @@ class ClaudeCliProvider {
     this.model = config.model || 'claude-opus-4-5-20251101';
     this.maxTokens = config.maxTokens || 16384;
     this.verbose = config.verbose || false;
+    this.fast = config.fast || false;  // Fast mode for shorter prompts
     this.cliValidated = false;
 
     if (this.verbose) {
-      console.log(chalk.dim(`Initialized Claude CLI provider with model: ${this.model}`));
+      console.log(chalk.dim(`Initialized Claude CLI provider with model: ${this.model}${this.fast ? ' (fast mode)' : ''}`));
     }
   }
 
@@ -248,6 +249,43 @@ class ClaudeCliProvider {
    * @returns {string} The system prompt
    */
   buildSystemPrompt() {
+    // Fast mode: condensed system prompt for quicker responses
+    if (this.fast) {
+      return `You are an autonomous code improvement agent in a Ralph loop.
+
+FAST MODE - Be concise:
+Each iteration: use tools to examine codebase → identify what's needed → make substantial progress.
+The prompt repeats until work is complete. Discover progress by reading files.
+
+TOOLS (you MUST use these):
+- **Glob**: Find files by pattern (e.g., Glob "src/**/*.js")
+- **Grep**: Search code (e.g., Grep "function.*export")
+- **Read**: Read files (e.g., Read src/index.js)
+- **Edit**: Modify files with precise string replacement
+- **Write**: Create new files
+- **Bash**: Run commands (git, npm test, etc.)
+
+OUTPUT FORMAT:
+## Reasoning:
+[Brief analysis of current state and what needs to be done]
+
+## Summary:
+[One line: what you're implementing/fixing]
+
+## File: path/to/file.js
+\`\`\`javascript
+complete file contents here
+\`\`\`
+
+RULES:
+- Include COMPLETE file contents (not diffs)
+- Output "NO CHANGES NEEDED" if goal achieved
+- Make substantial progress each iteration
+- ALWAYS start by using tools (Glob/Grep/Read)
+
+Read the codebase carefully. Build on your previous work.`;
+    }
+
     return `You are an autonomous code improvement agent in a Ralph loop - a self-directed iterative development system.
 
 THE RALPH PHILOSOPHY:
@@ -336,6 +374,11 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
    * @returns {string} The formatted user message
    */
   buildUserMessage(prompt, context, iteration) {
+    // In fast mode, use condensed prompts for quicker responses
+    if (this.fast) {
+      return this.buildFastUserMessage(prompt, context, iteration);
+    }
+
     // Build a clean, minimal prompt (leverage Claude CLI's local tools)
     let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
 
@@ -412,6 +455,39 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
     message += `Use your tools to explore the codebase and make substantial progress toward the goal.\n`;
     message += `Remember: You are building on your own prior work. Use git history and breadcrumbs to understand context.\n`;
     message += `Start by using Glob/Grep to find relevant files, then Read to examine them.`;
+
+    return message;
+  }
+
+  /**
+   * Builds a condensed user message for fast mode
+   * @param {string} prompt - The task prompt
+   * @param {Object} context - Codebase context
+   * @param {number} iteration - Current iteration number
+   * @returns {string} The formatted user message
+   */
+  buildFastUserMessage(prompt, context, iteration) {
+    let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
+
+    // Condensed context for fast mode - only show last 5 git log entries
+    if (context.gitLog) {
+      message += `# Recent History:\n\`\`\`\n${context.gitLog.split('\n').slice(0, 5).join('\n')}\n\`\`\`\n\n`;
+    }
+
+    if (context.gitStatus) {
+      message += `# Status:\n\`\`\`\n${context.gitStatus}\n\`\`\`\n\n`;
+    }
+
+    // Truncate breadcrumbs in fast mode
+    if (context.breadcrumbs) {
+      message += `# Notes:\n${context.breadcrumbs.substring(0, 300)}${context.breadcrumbs.length > 300 ? '...' : ''}\n\n`;
+    }
+
+    // Working directory
+    message += `# Working Directory:\n${process.cwd()}\n\n`;
+
+    // Concise instructions
+    message += `Use Glob/Grep/Read tools to explore. Make substantial progress. Output complete files.`;
 
     return message;
   }

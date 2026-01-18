@@ -17,6 +17,7 @@ class ConfigLoader {
       autoCommit: false,
       verbose: false,
       dryRun: false,
+      fast: false, // Fast mode: use quicker model with shorter responses
       context: {
         maxSize: 100000, // 100KB max context size
         maxFiles: 50     // Max 50 files
@@ -60,6 +61,24 @@ class ConfigLoader {
         openai: {
           model: 'gpt-5',
           maxTokens: 16384  // Increased from 8K to allow larger responses
+        }
+      },
+      // Fast mode overrides - used when --fast flag is enabled
+      fastMode: {
+        maxIterations: 10, // Fewer iterations in fast mode
+        providers: {
+          claude: {
+            model: 'claude-sonnet-4-5-20250929',  // Sonnet is faster than Opus
+            maxTokens: 8192  // Shorter responses for speed
+          },
+          'claude-cli': {
+            model: 'claude-sonnet-4-5-20250929',  // Sonnet for faster CLI responses
+            maxTokens: 8192
+          },
+          openai: {
+            model: 'gpt-4o-mini',  // Faster OpenAI model
+            maxTokens: 8192
+          }
         }
       }
     };
@@ -181,6 +200,10 @@ convergenceThreshold: 0.02
 
 # Automatically commit changes after each iteration
 autoCommit: false
+
+# Fast mode: use quicker model (Sonnet) with shorter responses
+# Can also be enabled with --fast flag
+fast: false
 
 # Context limits
 context:

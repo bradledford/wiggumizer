@@ -19,6 +19,7 @@ class RalphLoop {
     this.convergenceThreshold = options.convergenceThreshold || 0.02;
     this.filePatterns = options.filePatterns || {};
     this.contextLimits = options.contextLimits || { maxSize: 100000, maxFiles: 50 };
+    this.fast = options.fast || false;  // Fast mode for quicker iterations
     this.iteration = 0;
     this.filesModifiedTotal = 0;
 
@@ -52,6 +53,7 @@ class RalphLoop {
       const providerConfig = {
         ...(options.providerConfig?.claude || {}),
         verbose: this.verbose,
+        fast: this.fast,  // Pass fast mode flag for condensed prompts
         maxRetries: options.retry?.maxRetries,
         baseDelay: options.retry?.baseDelay,
         maxDelay: options.retry?.maxDelay,
@@ -62,7 +64,8 @@ class RalphLoop {
     } else if (providerName === 'claude-cli') {
       const providerConfig = {
         ...(options.providerConfig?.['claude-cli'] || {}),
-        verbose: this.verbose
+        verbose: this.verbose,
+        fast: this.fast  // Pass fast mode flag for condensed prompts
       };
       this.provider = new ClaudeCliProvider(providerConfig);
     } else {
@@ -146,6 +149,14 @@ class RalphLoop {
         // Get current codebase state
         const codebaseContext = this.getCodebaseContext();
 
+        // For Claude CLI provider, snapshot git status before iteration
+        // Claude CLI modifies files directly via its tools, not via diffs in the response
+        const isCliProvider = this.provider.constructor.name === 'ClaudeCliProvider';
+        let gitFilesBefore = [];
+        if (isCliProvider && !this.dryRun) {
+          gitFilesBefore = GitHelper.getModifiedFiles();
+        }
+
         // Update file hashes for convergence detection
         const hashComparison = this.convergence.updateFileHashes(codebaseContext.files);
 
@@ -184,12 +195,15 @@ class RalphLoop {
 
         // Heartbeat: update spinner periodically even without output
         // This prevents the appearance of being frozen
+        // In fast mode, use shorter intervals for more responsive feedback
+        const heartbeatInterval = this.fast ? 1000 : 2000;
+        const waitThreshold = this.fast ? 2 : 3;
         heartbeat = setInterval(() => {
           const elapsed = Math.round((Date.now() - lastOutputTime) / 1000);
-          if (elapsed > 3) {
+          if (elapsed > waitThreshold) {
             spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(`waiting for response... (${elapsed}s)`)}`;
           }
-        }, 2000);
+        }, heartbeatInterval);
 
         // Send to AI provider (prompt stays constant - true Ralph philosophy)
         // Always pass onOutput to show progress (not just in verbose mode)
@@ -227,9 +241,23 @@ class RalphLoop {
         let filesModified = 0;
         let modifiedFilesList = [];
         if (!this.dryRun && response.changes) {
-          const result = this.applyChanges(response.changes);
-          filesModified = result.count;
-          modifiedFilesList = result.files;
+          // For Claude CLI provider, detect files modified via git status comparison
+          // (Claude CLI modifies files directly via its tools, not via diffs)
+          if (isCliProvider) {
+            const gitFilesAfter = GitHelper.getModifiedFiles();
+            // Find files that are newly modified (in after but not in before)
+            modifiedFilesList = gitFilesAfter.filter(f => !gitFilesBefore.includes(f));
+            filesModified = modifiedFilesList.length;
+
+            if (this.verbose && filesModified > 0) {
+              console.log(chalk.dim(`    Detected via git: ${modifiedFilesList.join(', ')}`));
+            }
+          } else {
+            // For API provider, apply diffs from response
+            const result = this.applyChanges(response.changes);
+            filesModified = result.count;
+            modifiedFilesList = result.files;
+          }
 
           if (filesModified > 0) {
             console.log(chalk.green(`  ✓ Applied changes to ${filesModified} file(s)`));

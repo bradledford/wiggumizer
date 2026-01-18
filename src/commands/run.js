@@ -19,6 +19,36 @@ async function runCommand(cliOptions) {
   // Load and merge configuration
   const config = ConfigLoader.load(cliOptions);
 
+  // Handle --fast option - apply fast mode overrides
+  if (cliOptions.fast) {
+    config.fast = true;
+
+    // Apply fast mode settings
+    if (config.fastMode) {
+      // Override max iterations with fast mode default (unless explicitly set via CLI)
+      if (!cliOptions.maxIterations || cliOptions.maxIterations === '20') {
+        config.maxIterations = config.fastMode.maxIterations || 10;
+      }
+
+      // Override provider settings with fast mode models
+      if (config.fastMode.providers) {
+        for (const [providerName, fastSettings] of Object.entries(config.fastMode.providers)) {
+          if (config.providers && config.providers[providerName]) {
+            // Merge fast mode settings into provider config
+            config.providers[providerName] = {
+              ...config.providers[providerName],
+              ...fastSettings
+            };
+          }
+        }
+      }
+    }
+
+    if (!quiet) {
+      console.log(chalk.yellow('⚡ Fast mode enabled') + chalk.dim(' - using Sonnet model for quicker responses'));
+    }
+  }
+
   // Handle --files option (comma-separated patterns)
   if (cliOptions.files) {
     const patterns = cliOptions.files.split(',').map(p => p.trim());
@@ -73,6 +103,11 @@ async function runCommand(cliOptions) {
 
   if (!quiet) {
     console.log(chalk.cyan('Provider:') + ` ${config.provider}`);
+    // Show model info if available
+    const providerConfig = config.providers?.[config.provider];
+    if (providerConfig?.model) {
+      console.log(chalk.cyan('Model:') + ` ${providerConfig.model}${config.fast ? chalk.yellow(' (fast)') : ''}`);
+    }
     console.log(chalk.cyan('Prompt:') + ` ${config.prompt || 'PROMPT.md'}`);
     console.log(chalk.cyan('Max iterations:') + ` ${config.maxIterations}`);
     if (config.convergenceThreshold) {
@@ -161,6 +196,7 @@ async function runOnce(prompt, config, quiet, resumeState = null) {
     retry: config.retry,
     rateLimit: config.rateLimit,
     providerConfig: config.providers,
+    fast: config.fast,
     quiet
   });
 

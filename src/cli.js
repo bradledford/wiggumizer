@@ -23,6 +23,7 @@ program
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('-q, --quiet', 'Minimal output (only errors and final result)')
+  .option('-f, --fast', 'Fast mode: use quicker model (Sonnet) with shorter responses')
   .option('--dry-run', 'Show what would change without modifying files')
   .option('--auto-commit', 'Automatically commit changes after each iteration')
   .option('--watch', 'Watch PROMPT.md for changes and auto-restart loop')
@@ -168,6 +169,7 @@ multiCommand
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('-q, --quiet', 'Minimal output')
+  .option('-f, --fast', 'Fast mode: use quicker model (Sonnet) with shorter responses')
   .option('--dry-run', 'Show what would change without modifying files')
   .option('--auto-commit', 'Automatically commit changes after each iteration')
   .action(async (options) => {
