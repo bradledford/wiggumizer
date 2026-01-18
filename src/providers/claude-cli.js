@@ -53,7 +53,9 @@ class ClaudeCliProvider {
     const args = [
       '-p',
       '--model', this.model,
-      '--system-prompt', systemPrompt
+      '--system-prompt', systemPrompt,
+      // Enable file editing and tool permissions - without this, Claude CLI cannot modify files
+      '--allowedTools', 'Edit,Write,Read,Glob,Grep,Bash'
     ];
 
     // Enable streaming JSON output if callback provided
@@ -69,7 +71,7 @@ class ClaudeCliProvider {
     // args.push(userMessage);
 
     if (this.verbose) {
-      console.log(chalk.dim(`\nExecuting: claude -p --model ${this.model} --output-format stream-json --include-partial-messages --verbose`));
+      console.log(chalk.dim(`\nExecuting: claude -p --model ${this.model} --allowedTools Edit,Write,Read,Glob,Grep,Bash --output-format stream-json --include-partial-messages --verbose`));
       console.log(chalk.dim(`User message length: ${userMessage.length} chars (via stdin)`));
     }
 
