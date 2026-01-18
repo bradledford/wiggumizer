@@ -152,22 +152,34 @@ class RalphLoop {
         // Set up streaming output handler for all providers
         // This shows real-time progress so users know it's not frozen
         let lastOutputTime = Date.now();
+        let outputBuffer = '';
+        let lastDisplayedSentence = '';
+
         const onOutput = (text) => {
           lastOutputTime = Date.now();
+          outputBuffer += text;
 
-          // Extract the last meaningful line from the text
-          const lines = text.split('\n').filter(l => l.trim());
-          if (lines.length === 0) return;
+          // Look for complete sentences (ending with . ! ? or newline)
+          // We batch output until we have a meaningful chunk to display
+          const sentenceMatch = outputBuffer.match(/^([\s\S]*?[.!?\n])\s*/);
 
-          const lastLine = lines[lines.length - 1].trim();
+          if (sentenceMatch) {
+            const completeSentence = sentenceMatch[1].trim();
+            // Remove the matched sentence from buffer
+            outputBuffer = outputBuffer.slice(sentenceMatch[0].length);
 
-          // Update spinner with the latest output
-          // Truncate if too long (max 80 chars)
-          const displayLine = lastLine.length > 80
-            ? lastLine.substring(0, 77) + '...'
-            : lastLine;
+            // Only update if we have meaningful content
+            if (completeSentence && completeSentence !== lastDisplayedSentence) {
+              lastDisplayedSentence = completeSentence;
 
-          spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(displayLine)}`;
+              // Truncate if too long (max 80 chars)
+              const displayLine = completeSentence.length > 80
+                ? completeSentence.substring(0, 77) + '...'
+                : completeSentence;
+
+              spinner.text = `Iteration ${this.iteration}/${this.maxIterations}: ${chalk.dim(displayLine)}`;
+            }
+          }
         };
 
         // Heartbeat: update spinner periodically even without output
