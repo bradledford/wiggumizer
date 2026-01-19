@@ -1,6 +1,6 @@
 {
   "name": "wiggumizer",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Ralph Wiggum style AI coding automation - iterative code refinement with LLMs",
   "main": "src/index.js",
   "bin": {
