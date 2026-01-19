@@ -399,6 +399,11 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
     // Check if response is explicitly stating no changes (must be short and clear)
     const trimmed = content.trim();
 
+    // Empty responses should return false (no indication of "no changes")
+    if (trimmed.length === 0) {
+      return false;
+    }
+
     // Explicit "NO CHANGES NEEDED" response (as instructed in system prompt)
     if (/^NO\s+CHANGES\s+NEEDED/i.test(trimmed)) {
       return true;
@@ -407,6 +412,12 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
     // Check if response contains diff changes (--- a/ and +++ b/ pattern)
     // If it has diffs, it's definitely not "no changes"
     if (/^---\s+a\//m.test(content) && /^\+\+\+\s+b\//m.test(content)) {
+      return false;
+    }
+
+    // Check if response contains file changes (## File: pattern)
+    // If it has file changes, it's definitely not "no changes"
+    if (/##\s*File:/i.test(content)) {
       return false;
     }
 
@@ -432,8 +443,10 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
       }
     }
 
-    // If response is very short and doesn't have diffs, likely no changes
-    if (trimmed.length < 100) {
+    // If response is very short (but not empty) and doesn't have diffs,
+    // and doesn't contain reasoning/summary sections, likely no changes
+    // But if it has ## Reasoning or ## Summary sections, it's providing analysis, not saying "no changes"
+    if (trimmed.length < 100 && !/##\s*(?:Reasoning|Summary):/i.test(content)) {
       return true;
     }
 

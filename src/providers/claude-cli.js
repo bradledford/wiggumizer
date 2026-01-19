@@ -516,6 +516,11 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
     // Check if response is explicitly stating no changes (must be short and clear)
     const trimmed = content.trim();
 
+    // Empty responses should return false (no indication of "no changes")
+    if (trimmed.length === 0) {
+      return false;
+    }
+
     // Explicit "NO CHANGES NEEDED" response (as instructed in system prompt)
     if (/^NO\s+CHANGES\s+NEEDED/i.test(trimmed)) {
       return true;
@@ -549,8 +554,10 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
       }
     }
 
-    // If response is very short and doesn't have file changes, likely no changes
-    if (trimmed.length < 100) {
+    // If response is very short (but not empty) and doesn't have file changes,
+    // and doesn't contain reasoning/summary sections, likely no changes
+    // But if it has ## Reasoning or ## Summary sections, it's providing analysis, not saying "no changes"
+    if (trimmed.length < 100 && !/##\s*(?:Reasoning|Summary):/i.test(content)) {
       return true;
     }
 
