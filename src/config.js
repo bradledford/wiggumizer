@@ -269,6 +269,17 @@ providers:
   openai:
     model: gpt-5
     maxTokens: 16384  # Increased from 8K to allow larger responses
+
+# Chat service notifications
+# Send notifications to Slack/WhatsApp on completion or errors
+# Requires CLI tools to be installed:
+#   Slack: https://api.slack.com/automation/cli/install
+#   WhatsApp: npm install -g mudslide
+#
+# chatProvider: slack          # Chat service (slack, whatsapp)
+# channel: "#wiggumizer"       # Slack channel for notifications
+# contact: "+1234567890"       # WhatsApp contact number
+# group: "Dev Team"            # WhatsApp group name
 `;
   }
 

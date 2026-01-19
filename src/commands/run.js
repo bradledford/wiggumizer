@@ -61,6 +61,20 @@ async function runCommand(cliOptions) {
     config.convergenceThreshold = parseFloat(cliOptions.convergenceThreshold);
   }
 
+  // Handle chat provider options
+  if (cliOptions.chatProvider) {
+    config.chatProvider = cliOptions.chatProvider;
+  }
+  if (cliOptions.channel) {
+    config.channel = cliOptions.channel;
+  }
+  if (cliOptions.contact) {
+    config.contact = cliOptions.contact;
+  }
+  if (cliOptions.group) {
+    config.group = cliOptions.group;
+  }
+
   // Handle --continue option (resume from previous session)
   let resumeState = null;
   if (cliOptions.continue) {
@@ -197,7 +211,13 @@ async function runOnce(prompt, config, quiet, resumeState = null) {
     rateLimit: config.rateLimit,
     providerConfig: config.providers,
     fast: config.fast,
-    quiet
+    quiet,
+    // Chat notification options
+    chatProvider: config.chatProvider,
+    chatChannel: config.channel,
+    chatContact: config.contact,
+    chatGroup: config.group,
+    chatProviderConfig: config.chatProviderConfig
   });
 
   try {

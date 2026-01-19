@@ -8,6 +8,7 @@ const IterationLogger = require('./iteration-logger');
 const ConvergenceAnalyzer = require('./convergence-analyzer');
 const WorkspaceManager = require('./workspace-manager');
 const PromptUpdater = require('./prompt-updater');
+const { ChatNotifier } = require('./chat');
 
 class RalphLoop {
   constructor(options) {
@@ -71,12 +72,28 @@ class RalphLoop {
     } else {
       throw new Error(`Provider ${providerName} not yet implemented. Coming soon!`);
     }
+
+    // Initialize chat notifier for external notifications
+    this.chatNotifier = new ChatNotifier({
+      provider: options.chatProvider,
+      channel: options.chatChannel,
+      contact: options.chatContact,
+      group: options.chatGroup,
+      verbose: this.verbose,
+      providerConfig: options.chatProviderConfig
+    });
   }
 
   async run() {
     console.log(chalk.bold('Starting Ralph loop...\n'));
 
     const startTime = Date.now();
+
+    // Connect chat notifier if configured
+    if (this.chatNotifier.isEnabled()) {
+      console.log(chalk.blue('ℹ Chat notifications:') + chalk.dim(` ${this.chatNotifier.providerName}`));
+      await this.chatNotifier.connect();
+    }
 
     // Show workspace info
     const workspaces = this.workspaceManager.getWorkspaces();
@@ -361,6 +378,14 @@ class RalphLoop {
           error: error.message
         });
 
+        // Send error notification via chat if configured
+        await this.chatNotifier.notifyError({
+          message: error.message,
+          iteration: this.iteration,
+          filesModifiedBeforeError: this.filesModifiedTotal,
+          reason: this.categorizeError(error)
+        });
+
         throw error;
       }
     }
@@ -413,8 +438,8 @@ class RalphLoop {
     }
     console.log();
 
-    // Return summary data for session summary generation
-    return {
+    // Build result object
+    const result = {
       totalIterations: this.iteration,
       filesModified: this.filesModifiedTotal,
       duration,
@@ -423,6 +448,45 @@ class RalphLoop {
       convergenceSummary,
       sessionDir: this.logger.sessionDir
     };
+
+    // Send success notification via chat if configured
+    await this.chatNotifier.notifySuccess(result);
+
+    // Disconnect chat notifier
+    await this.chatNotifier.disconnect();
+
+    // Return summary data for session summary generation
+    return result;
+  }
+
+  /**
+   * Categorize an error for notification purposes
+   * @param {Error} error - The error to categorize
+   * @returns {string} Error category
+   */
+  categorizeError(error) {
+    const message = error.message.toLowerCase();
+
+    if (message.includes('rate limit') || message.includes('429')) {
+      return 'Rate limit hit';
+    }
+    if (message.includes('authentication') || message.includes('unauthorized') || message.includes('401')) {
+      return 'Authentication failed';
+    }
+    if (message.includes('permission') || message.includes('403')) {
+      return 'Permission denied';
+    }
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return 'Request timeout';
+    }
+    if (message.includes('network') || message.includes('econnrefused') || message.includes('enotfound')) {
+      return 'Network error';
+    }
+    if (message.includes('not found') || message.includes('404')) {
+      return 'Resource not found';
+    }
+
+    return 'Unexpected error';
   }
 
   getCodebaseContext() {

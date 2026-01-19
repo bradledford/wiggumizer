@@ -66,6 +66,9 @@ Git integration, syntax validation, test execution, automatic backups. Safe by d
 ### 📝 Change Documentation
 Automatic session summary generation with commit messages, PR descriptions, and JIRA updates. Link changes to issues with YAML metadata.
 
+### 💬 Chat Service Integration
+Get notified via Slack or WhatsApp when runs complete or encounter errors. Interactive mode to respond to chat messages.
+
 ### 🧠 Self-Discovery Through Iteration
 Unlike other tools that "tell" the AI what was done, Wiggumizer implements the pure Ralph philosophy:
 - **Constant prompts** - The same goal every iteration, forcing deeper engagement
@@ -283,6 +286,68 @@ export ANTHROPIC_API_KEY=your-api-key-here
 ```
 
 See [Configuration Reference](docs/cli-reference/configuration-file.md) for all options.
+
+## Chat Service Integration
+
+Wiggumizer can send notifications to external chat services when runs complete or encounter errors. This is useful for long-running jobs where you want to be notified of progress.
+
+### Supported Providers
+
+- **Slack** - Uses the Slack CLI for local workspace integration
+- **WhatsApp** - Uses CLI tools like `mudslide` for WhatsApp messaging
+
+### Usage
+
+```bash
+# Send notifications to Slack
+wiggumize run --chat-provider slack --channel "#dev-notifications"
+
+# Send notifications via WhatsApp
+wiggumize run --chat-provider whatsapp --contact "+1234567890"
+
+# Interactive mode - listen and respond to messages
+wiggumize listen --chat-provider slack --channel "#random"
+```
+
+### Prerequisites
+
+**For Slack:**
+```bash
+# Install Slack CLI
+# See: https://api.slack.com/automation/cli/install
+
+# Authenticate
+slack login
+```
+
+**For WhatsApp:**
+```bash
+# Install mudslide
+npm install -g mudslide
+
+# Authenticate (scan QR code)
+mudslide login
+```
+
+### Configuration
+
+Add to `.wiggumizer.yml`:
+
+```yaml
+# Chat notifications
+chatProvider: slack
+channel: "#wiggumizer"
+
+# Or for WhatsApp
+# chatProvider: whatsapp
+# contact: "+1234567890"
+# group: "Dev Team"
+```
+
+### Notification Events
+
+1. **Successful completion** - Summary of work completed (files modified, iterations, duration)
+2. **Unexpected stoppage** - Error notification with reason (rate limit, permission denied, etc.)
 
 ## Community
 

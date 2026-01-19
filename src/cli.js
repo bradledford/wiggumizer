@@ -30,6 +30,11 @@ program
   .option('--files <patterns>', 'Glob patterns for files to include (comma-separated)')
   .option('--convergence-threshold <num>', 'Convergence threshold (0.0 to 1.0)', '0.02')
   .option('--continue', 'Continue from previous session if available')
+  // Chat notification options
+  .option('--chat-provider <name>', 'Chat service provider (slack, whatsapp)')
+  .option('--channel <name>', 'Slack channel to send notifications (e.g., #general)')
+  .option('--contact <phone>', 'WhatsApp contact number (e.g., +1234567890)')
+  .option('--group <name>', 'WhatsApp group name')
   .action(async (options) => {
     const runCommand = require('./commands/run');
     await runCommand(options);
@@ -207,6 +212,21 @@ program
   .action(async (options) => {
     const summaryCommand = require('./commands/summary');
     await summaryCommand(options);
+  });
+
+// Listen command - interactive chat mode
+program
+  .command('listen')
+  .description('Listen for messages and respond with Ralph Wiggum style')
+  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER)
+  .option('--chat-provider <name>', 'Chat service provider (slack, whatsapp)', 'slack')
+  .option('--channel <name>', 'Slack channel to listen on (e.g., #random)')
+  .option('--contact <phone>', 'WhatsApp contact to listen to')
+  .option('--group <name>', 'WhatsApp group to listen to')
+  .option('-v, --verbose', 'Verbose output')
+  .action(async (options) => {
+    const listenCommand = require('./commands/listen');
+    await listenCommand(options);
   });
 
 // Doctor command - diagnose issues

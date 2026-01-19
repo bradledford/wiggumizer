@@ -7,8 +7,16 @@
 
 const RalphLoop = require('./loop');
 const ClaudeProvider = require('./providers/claude');
+const ClaudeCliProvider = require('./providers/claude-cli');
+const { ChatNotifier, SlackProvider, WhatsAppProvider, BaseChatProvider } = require('./chat');
 
 module.exports = {
   RalphLoop,
-  ClaudeProvider
+  ClaudeProvider,
+  ClaudeCliProvider,
+  // Chat service integration
+  ChatNotifier,
+  SlackProvider,
+  WhatsAppProvider,
+  BaseChatProvider
 };

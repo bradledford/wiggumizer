@@ -14,6 +14,10 @@ convergenceThreshold: 0.02
 # Automatically commit changes after each iteration
 autoCommit: false
 
+# Fast mode: use quicker model (Sonnet) with shorter responses
+# Can also be enabled with --fast flag
+fast: false
+
 # Context limits
 context:
   maxSize: 100000  # Maximum context size in bytes (100KB)
@@ -43,6 +47,21 @@ files:
     - "yarn.lock"
     - "*.log"
 
+# Multi-repo workspace support
+# Uncomment to work across multiple repositories
+# workspaces:
+#   - name: backend          # Optional: friendly name for logging
+#     path: ../my-backend    # Relative or absolute path
+#     include:               # Optional: override file patterns
+#       - "src/**/*.js"
+#     exclude:
+#       - "test/**"
+#   - name: frontend
+#     path: ../my-frontend
+#     include:
+#       - "src/**/*.tsx"
+#       - "src/**/*.ts"
+
 # Retry configuration for API calls
 retry:
   maxRetries: 3        # Maximum number of retries
@@ -60,6 +79,24 @@ providers:
     model: claude-opus-4-5-20251101
     maxTokens: 16384  # Claude Opus 4.5 supports up to 32K output tokens
 
+  claude-cli:
+    model: claude-opus-4-5-20251101
+    maxTokens: 16384  # Uses claude CLI instead of API
+
   openai:
     model: gpt-5
     maxTokens: 16384  # Increased from 8K to allow larger responses
+
+# Chat Service Notifications
+# Send notifications to Slack or WhatsApp on completion or errors
+#
+# Prerequisites:
+#   Slack: Install Slack CLI - https://api.slack.com/automation/cli/install
+#          Then authenticate with: slack login
+#   WhatsApp: Install mudslide - npm install -g mudslide
+#             Then authenticate: mudslide login
+#
+# chatProvider: slack          # Chat provider: 'slack' or 'whatsapp'
+# channel: "#wiggumizer"       # Slack channel for notifications
+# contact: "+1234567890"       # WhatsApp contact number (E.164 format)
+# group: "Dev Team"            # WhatsApp group name
