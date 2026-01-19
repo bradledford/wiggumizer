@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
+const GitHelper = require('./git-helper');
+const IterationJournal = require('./iteration-journal');
 
 /**
  * Manages multi-repository workspaces
@@ -210,7 +212,8 @@ class WorkspaceManager {
         isMultiRepo: true,
         files,
         workspaces,
-        cwd: this.baseDir
+        cwd: this.baseDir,
+        breadcrumbs: this.readBreadcrumbs()
       };
     } else {
       // Single repo mode: use FileSelector directly
@@ -225,10 +228,110 @@ class WorkspaceManager {
 
       const files = selector.getFilesWithContent();
 
+      // Get iteration history (Git or journal-based)
+      const iterationContext = this.getIterationContext();
+
       return {
         isMultiRepo: false,
         files,
-        cwd
+        cwd,
+        breadcrumbs: this.readBreadcrumbs(),
+        // Unified iteration context
+        gitLog: iterationContext.gitLog,
+        gitStatus: iterationContext.gitStatus,
+        iterationHistory: iterationContext.iterationHistory,
+        isGitRepo: iterationContext.isGitRepo
+      };
+    }
+  }
+
+  /**
+   * Read breadcrumbs (ralph-notes.md) for strategic context
+   * Supports both new location (.wiggumizer/ralph-notes.md) and legacy (.ralph-notes.md)
+   * @param {string} cwd - Working directory (default: this.baseDir)
+   * @returns {string|null} Breadcrumbs content or null if not found
+   */
+  readBreadcrumbs(cwd = null) {
+    const basePath = cwd || this.baseDir;
+
+    // Check new location first: .wiggumizer/ralph-notes.md
+    const newPath = path.join(basePath, '.wiggumizer', 'ralph-notes.md');
+    if (fs.existsSync(newPath)) {
+      try {
+        return fs.readFileSync(newPath, 'utf-8');
+      } catch (error) {
+        if (this.verbose) {
+          console.warn(chalk.yellow(`Warning: Could not read breadcrumbs: ${error.message}`));
+        }
+      }
+    }
+
+    // Fall back to legacy location: .ralph-notes.md
+    const legacyPath = path.join(basePath, '.ralph-notes.md');
+    if (fs.existsSync(legacyPath)) {
+      try {
+        return fs.readFileSync(legacyPath, 'utf-8');
+      } catch (error) {
+        if (this.verbose) {
+          console.warn(chalk.yellow(`Warning: Could not read breadcrumbs: ${error.message}`));
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get iteration context (git log or journal-based history)
+   * Provides unified interface regardless of whether Git is available
+   * @param {string} cwd - Working directory (default: this.baseDir)
+   * @returns {Object} Context with gitLog, gitStatus, iterationHistory, isGitRepo
+   */
+  getIterationContext(cwd = null) {
+    const basePath = cwd || this.baseDir;
+    const { execSync } = require('child_process');
+
+    const isGitRepo = GitHelper.isGitRepo(basePath);
+
+    if (isGitRepo) {
+      // Git-based context (preferred)
+      let gitLog = '';
+      let gitStatus = '';
+
+      try {
+        gitLog = execSync('git log --oneline -10', {
+          encoding: 'utf-8',
+          cwd: basePath
+        }).trim();
+      } catch (error) {
+        // Git log failed, leave empty
+      }
+
+      try {
+        gitStatus = execSync('git status --short', {
+          encoding: 'utf-8',
+          cwd: basePath
+        }).trim();
+      } catch (error) {
+        // Git status failed, leave empty
+      }
+
+      return {
+        isGitRepo: true,
+        gitLog,
+        gitStatus,
+        iterationHistory: gitLog // Unified interface
+      };
+    } else {
+      // Journal-based context (fallback for non-Git repos)
+      const journal = new IterationJournal({ cwd: basePath, verbose: this.verbose });
+      const iterationHistory = journal.format(10);
+
+      return {
+        isGitRepo: false,
+        gitLog: null,
+        gitStatus: null,
+        iterationHistory: iterationHistory || null
       };
     }
   }

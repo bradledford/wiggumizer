@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const ClaudeCliProvider = require('./src/providers/claude-cli.js');
+const ClaudeCliProvider = require('../src/providers/claude-cli.js');
 
 console.log('Testing Claude CLI streaming...\n');
 

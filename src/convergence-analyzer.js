@@ -147,13 +147,36 @@ class ConvergenceAnalyzer {
   checkNoChangesConvergence() {
     const recentIterations = this.iterationHistory.slice(-3);
 
-    if (recentIterations.length < 2) {
+    if (recentIterations.length < 1) {
       return { converged: false };
     }
 
-    const allNoChanges = recentIterations.every(iter => iter.filesModified === 0);
+    // Check if the last iteration had no changes
+    const lastIteration = recentIterations[recentIterations.length - 1];
+    if (lastIteration.filesModified === 0) {
+      // If the last iteration had no changes, check how many recent iterations also had no changes
+      const consecutiveNoChanges = [];
+      for (let i = recentIterations.length - 1; i >= 0; i--) {
+        if (recentIterations[i].filesModified === 0) {
+          consecutiveNoChanges.push(recentIterations[i]);
+        } else {
+          break;
+        }
+      }
 
-    if (allNoChanges) {
+      // If we have 2 or more consecutive iterations with no changes, converge
+      if (consecutiveNoChanges.length >= 2) {
+        return {
+          converged: true,
+          confidence: 1.0,
+          reason: `No file modifications for ${consecutiveNoChanges.length} consecutive iterations`
+        };
+      }
+    }
+
+    // Also check if all recent iterations had no changes (original behavior)
+    const allNoChanges = recentIterations.every(iter => iter.filesModified === 0);
+    if (allNoChanges && recentIterations.length >= 2) {
       return {
         converged: true,
         confidence: 1.0,

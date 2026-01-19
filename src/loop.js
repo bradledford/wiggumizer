@@ -5,6 +5,7 @@ const ClaudeProvider = require('./providers/claude');
 const ClaudeCliProvider = require('./providers/claude-cli');
 const GitHelper = require('./git-helper');
 const IterationLogger = require('./iteration-logger');
+const IterationJournal = require('./iteration-journal');
 const ConvergenceAnalyzer = require('./convergence-analyzer');
 const WorkspaceManager = require('./workspace-manager');
 const PromptUpdater = require('./prompt-updater');
@@ -82,6 +83,15 @@ class RalphLoop {
       verbose: this.verbose,
       providerConfig: options.chatProviderConfig
     });
+
+    // Initialize iteration journal for non-Git repos
+    this.iterationJournal = new IterationJournal({
+      cwd: process.cwd(),
+      verbose: this.verbose
+    });
+
+    // Track if we're in a Git repo (for deciding whether to use journal)
+    this.isGitRepo = GitHelper.isGitRepo();
   }
 
   async run() {
@@ -105,12 +115,20 @@ class RalphLoop {
       console.log();
     }
 
-    // Warn if git repos are dirty
-    for (const workspace of workspaces) {
-      if (this.workspaceManager.isMultiRepo()) {
+    // Warn if git repos are dirty or show non-Git warning
+    if (this.workspaceManager.isMultiRepo()) {
+      for (const workspace of workspaces) {
         console.log(chalk.dim(`Checking workspace: ${workspace.name}`));
+        GitHelper.warnIfDirty(workspace.absolutePath);
       }
-      GitHelper.warnIfDirty(workspace.absolutePath);
+    } else {
+      // Single repo mode
+      if (this.isGitRepo) {
+        GitHelper.warnIfDirty();
+      } else {
+        // Show non-Git warning with journal info
+        IterationJournal.displayNonGitWarning();
+      }
     }
 
     // Store initial commits for rollback (per workspace)
@@ -174,9 +192,6 @@ class RalphLoop {
           gitFilesBefore = GitHelper.getModifiedFiles();
         }
 
-        // Update file hashes for convergence detection
-        const hashComparison = this.convergence.updateFileHashes(codebaseContext.files);
-
         // Set up streaming output handler for all providers
         // This shows real-time progress so users know it's not frozen
         let lastOutputTime = Date.now();
@@ -234,10 +249,21 @@ class RalphLoop {
         clearInterval(heartbeat);
         spinner.succeed(`Iteration ${this.iteration}/${this.maxIterations}`);
 
+        // Update file hashes for convergence detection (before checking response.hasChanges)
+        // This ensures we have the current state recorded before deciding on convergence
+        this.convergence.updateFileHashes(codebaseContext.files);
+
         // Check if there are changes
         if (!response.hasChanges) {
           console.log(chalk.green('\n✓ Convergence detected!'));
           console.log(chalk.dim(`No changes after ${this.iteration} iterations.\n`));
+
+          // Record this iteration before breaking
+          this.convergence.recordIteration(this.iteration, {
+            filesModified: 0,
+            filesList: [],
+            response: response.raw || response.changes || ''
+          });
 
           // Log iteration
           this.logger.logIteration(this.iteration, {
@@ -248,6 +274,7 @@ class RalphLoop {
           });
 
           converged = true;
+          convergenceReason = 'No changes indicated by AI';
           break;
         }
 
@@ -297,6 +324,15 @@ class RalphLoop {
           filesList: modifiedFilesList,
           response: response.raw || response.changes || ''
         });
+
+        // Append to iteration journal (non-Git repos only)
+        if (!this.isGitRepo && filesModified > 0) {
+          this.iterationJournal.append({
+            iteration: this.iteration,
+            files: modifiedFilesList,
+            summary: response.summary || 'Changes applied'
+          });
+        }
 
         // Update work plan progress based on this iteration
         if (filesModified > 0) {

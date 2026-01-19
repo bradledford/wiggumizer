@@ -15,9 +15,8 @@ describe('SlackProvider', () => {
     it('should initialize with default config', () => {
       const provider = new SlackProvider();
       assert.strictEqual(provider.channel, '#general');
-      assert.strictEqual(provider.workspace, null);
-      assert.strictEqual(provider.listenProcess, null);
-      assert.strictEqual(provider.cliValidated, false);
+      // webhookUrl defaults to env var or undefined
+      assert.strictEqual(provider.webhookUrl, process.env.SLACK_WEBHOOK_URL || undefined);
     });
 
     it('should accept custom channel', () => {
@@ -25,9 +24,9 @@ describe('SlackProvider', () => {
       assert.strictEqual(provider.channel, '#dev-ops');
     });
 
-    it('should accept custom workspace', () => {
-      const provider = new SlackProvider({ workspace: 'my-workspace' });
-      assert.strictEqual(provider.workspace, 'my-workspace');
+    it('should accept custom webhookUrl', () => {
+      const provider = new SlackProvider({ webhookUrl: 'https://hooks.slack.com/test' });
+      assert.strictEqual(provider.webhookUrl, 'https://hooks.slack.com/test');
     });
   });
 
@@ -99,22 +98,20 @@ describe('SlackProvider', () => {
       const provider = new SlackProvider({ channel: '#test' });
       provider.connected = false;
 
-      // This will either fail with CLI not found error (throws)
-      // or return an error result if CLI check fails gracefully
+      // Without a webhook URL configured, connect() should throw
       try {
-        const result = await provider.sendMessage({
+        await provider.sendMessage({
           channel: '#test',
           message: 'Hello'
         });
-        // If we get here, it should have returned an error result
-        assert.strictEqual(result.success, false);
+        // Should not reach here
+        assert.fail('Expected error to be thrown');
       } catch (error) {
-        // Expected: CLI not found or not authenticated
+        // Expected: webhook URL not configured
         assert.ok(
-          error.message.includes('Slack CLI') ||
-          error.message.includes('not found') ||
-          error.message.includes('not authenticated'),
-          `Expected CLI-related error, got: ${error.message}`
+          error.message.includes('webhook URL not configured') ||
+          error.message.includes('Slack webhook'),
+          `Expected webhook-related error, got: ${error.message}`
         );
       }
     });

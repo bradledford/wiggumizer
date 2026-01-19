@@ -9,6 +9,8 @@ const RalphLoop = require('./loop');
 const ClaudeProvider = require('./providers/claude');
 const ClaudeCliProvider = require('./providers/claude-cli');
 const { ChatNotifier, SlackProvider, WhatsAppProvider, BaseChatProvider } = require('./chat');
+const IterationJournal = require('./iteration-journal');
+const WorkspaceManager = require('./workspace-manager');
 
 module.exports = {
   RalphLoop,
@@ -18,5 +20,8 @@ module.exports = {
   ChatNotifier,
   SlackProvider,
   WhatsAppProvider,
-  BaseChatProvider
+  BaseChatProvider,
+  // Non-Git support
+  IterationJournal,
+  WorkspaceManager
 };

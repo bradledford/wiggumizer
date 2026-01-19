@@ -275,20 +275,27 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
       // Add breadcrumbs if your past self left notes (UNIQUE FEATURE!)
       if (context.breadcrumbs) {
         message += `# Notes from Your Previous Self:\n`;
-        message += `Your past iterations left these breadcrumbs in .ralph-notes.md:\n\n`;
+        message += `Your past iterations left these breadcrumbs in .wiggumizer/ralph-notes.md:\n\n`;
         message += `${context.breadcrumbs}\n\n`;
-        message += `You can update .ralph-notes.md with new insights for your future self.\n\n`;
+        message += `You can update .wiggumizer/ralph-notes.md with new insights for your future self.\n\n`;
       } else {
         message += `# Breadcrumbs:\n`;
-        message += `You can create a file called .ralph-notes.md to leave notes for your future iterations.\n`;
+        message += `You can create a file called .wiggumizer/ralph-notes.md to leave notes for your future iterations.\n`;
         message += `Use it to track progress, document blockers, or remind yourself of the plan.\n\n`;
       }
 
-      // Add git context if available (KEY for self-discovery)
+      // Add iteration context - works for both Git and non-Git repos
+      // Prefer gitLog if available (backward compatible), fall back to iterationHistory
       if (context.gitLog) {
+        // Git-based history (preferred, backward compatible)
         message += `# Your Work History (git log):\n`;
         message += `You can see what you've done in previous iterations:\n\n`;
         message += `\`\`\`\n${context.gitLog}\n\`\`\`\n\n`;
+      } else if (context.iterationHistory) {
+        // Journal-based history (fallback for non-Git repos)
+        message += `# Your Work History (previous iterations):\n`;
+        message += `You can see what you've done in previous iterations:\n\n`;
+        message += `\`\`\`\n${context.iterationHistory}\n\`\`\`\n\n`;
       }
 
       if (context.gitStatus) {
@@ -334,9 +341,12 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
   buildFastUserMessage(prompt, context, iteration) {
     let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
 
-    // Condensed context for fast mode
-    if (context.gitLog) {
-      message += `# Recent History:\n\`\`\`\n${context.gitLog.split('\n').slice(0, 5).join('\n')}\n\`\`\`\n\n`;
+    // Condensed context for fast mode - support both Git and non-Git repos
+    // Prefer gitLog if available, fall back to iterationHistory
+    const historySource = context.gitLog || context.iterationHistory;
+    if (historySource) {
+      const historyLines = historySource.split('\n').slice(0, 5).join('\n');
+      message += `# Recent History:\n\`\`\`\n${historyLines}\n\`\`\`\n\n`;
     }
 
     if (context.gitStatus) {
@@ -344,7 +354,10 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
     }
 
     if (context.breadcrumbs) {
-      message += `# Notes:\n${context.breadcrumbs.substring(0, 300)}...\n\n`;
+      const truncatedBreadcrumbs = context.breadcrumbs.length > 300
+        ? context.breadcrumbs.substring(0, 300) + '...'
+        : context.breadcrumbs;
+      message += `# Notes:\n${truncatedBreadcrumbs}\n\n`;
     }
 
     message += `# Codebase:\n\n`;
@@ -391,26 +404,37 @@ REMEMBER: You are building on your own work. The codebase is your memory. Read i
       return true;
     }
 
-    // Only detect "no changes" in SHORT responses (< 200 chars)
-    // This prevents false positives when Claude mentions "already implemented" in analysis
-    // but then provides actual file changes
-    if (trimmed.length < 200) {
-      const noChangePatterns = [
-        /no changes needed/i,
-        /no modifications needed/i,
-        /nothing to change/i,
-        /no improvements needed/i
-      ];
-
-      if (noChangePatterns.some(pattern => pattern.test(content))) {
-        return true;
-      }
-    }
-
     // Check if response contains diff changes (--- a/ and +++ b/ pattern)
     // If it has diffs, it's definitely not "no changes"
     if (/^---\s+a\//m.test(content) && /^\+\+\+\s+b\//m.test(content)) {
       return false;
+    }
+
+    // Check for various "no changes" patterns in the content
+    // Look for these patterns particularly in Summary or Reasoning sections
+    const noChangePatterns = [
+      /no changes needed/i,
+      /no modifications needed/i,
+      /nothing to change/i,
+      /no improvements needed/i,
+      /no further changes/i,
+      /work (?:is )?complete/i,
+      /goal (?:is )?(?:fully )?(?:achieved|reached|accomplished)/i,
+      /all (?:features?|requirements?|tasks?) (?:are )?(?:implemented|complete|done)/i,
+      /everything (?:is )?(?:implemented|complete|working)/i
+    ];
+
+    // Check patterns, but only if there are no diffs present
+    // (we already checked for diffs above, so at this point we know there are none)
+    for (const pattern of noChangePatterns) {
+      if (pattern.test(content)) {
+        return true;
+      }
+    }
+
+    // If response is very short and doesn't have diffs, likely no changes
+    if (trimmed.length < 100) {
+      return true;
     }
 
     return false;

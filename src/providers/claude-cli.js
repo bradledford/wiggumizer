@@ -333,7 +333,7 @@ DEPTH OVER BREADTH:
 SELF-BREADCRUMBS (leave clues for your next iteration):
 - Use meaningful test names that document intent
 - Add brief comments explaining "why" for non-obvious decisions
-- Update .ralph-notes.md with insights for your future self
+- Update .wiggumizer/ralph-notes.md with insights for your future self
 - Structure code to reveal your thinking
 
 AUTONOMOUS VERIFICATION:
@@ -382,11 +382,20 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
     // Build a clean, minimal prompt (leverage Claude CLI's local tools)
     let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
 
-    // Add git context for self-discovery (compact, text-only)
+    // Add iteration context - works for both Git and non-Git repos
+    // Check for gitLog first (backward compatible) - if gitLog exists, use it
+    // Only fall back to iterationHistory when gitLog is explicitly null/undefined
+    // and iterationHistory is available
     if (context.gitLog) {
+      // Git-based history (preferred, also backward compatible)
       message += `# Your Work History (git log):\n`;
       message += `You can see what you've done in previous iterations:\n\n`;
       message += `\`\`\`\n${context.gitLog}\n\`\`\`\n\n`;
+    } else if (context.iterationHistory) {
+      // Journal-based history (fallback for non-Git repos)
+      message += `# Your Work History (previous iterations):\n`;
+      message += `You can see what you've done in previous iterations:\n\n`;
+      message += `\`\`\`\n${context.iterationHistory}\n\`\`\`\n\n`;
     }
 
     if (context.gitStatus) {
@@ -396,7 +405,7 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
     // Add breadcrumbs if available
     if (context.breadcrumbs) {
       message += `# Notes from Your Previous Self:\n`;
-      message += `Your past iterations left these breadcrumbs in .ralph-notes.md:\n\n`;
+      message += `Your past iterations left these breadcrumbs in .wiggumizer/ralph-notes.md:\n\n`;
       message += `${context.breadcrumbs}\n\n`;
     }
 
@@ -469,9 +478,12 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
   buildFastUserMessage(prompt, context, iteration) {
     let message = `# Goal (Iteration ${iteration}):\n${prompt}\n\n`;
 
-    // Condensed context for fast mode - only show last 5 git log entries
-    if (context.gitLog) {
-      message += `# Recent History:\n\`\`\`\n${context.gitLog.split('\n').slice(0, 5).join('\n')}\n\`\`\`\n\n`;
+    // Condensed context for fast mode - support both Git and non-Git repos
+    // Prefer gitLog if available, fall back to iterationHistory
+    const historySource = context.gitLog || context.iterationHistory;
+    if (historySource) {
+      const historyLines = historySource.split('\n').slice(0, 5).join('\n');
+      message += `# Recent History:\n\`\`\`\n${historyLines}\n\`\`\`\n\n`;
     }
 
     if (context.gitStatus) {
@@ -480,7 +492,10 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
 
     // Truncate breadcrumbs in fast mode
     if (context.breadcrumbs) {
-      message += `# Notes:\n${context.breadcrumbs.substring(0, 300)}${context.breadcrumbs.length > 300 ? '...' : ''}\n\n`;
+      const truncatedBreadcrumbs = context.breadcrumbs.length > 300
+        ? context.breadcrumbs.substring(0, 300) + '...'
+        : context.breadcrumbs;
+      message += `# Notes:\n${truncatedBreadcrumbs}\n\n`;
     }
 
     // Working directory
@@ -506,26 +521,37 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
       return true;
     }
 
-    // Only detect "no changes" in SHORT responses (< 200 chars)
-    // This prevents false positives when Claude mentions "already implemented" in analysis
-    // but then provides actual file changes
-    if (trimmed.length < 200) {
-      const noChangePatterns = [
-        /no changes needed/i,
-        /no modifications needed/i,
-        /nothing to change/i,
-        /no improvements needed/i
-      ];
-
-      if (noChangePatterns.some(pattern => pattern.test(content))) {
-        return true;
-      }
-    }
-
     // Check if response contains file changes (## File: pattern)
     // If it has file changes, it's definitely not "no changes"
     if (/##\s*File:/i.test(content)) {
       return false;
+    }
+
+    // Check for various "no changes" patterns in the content
+    // Look for these patterns particularly in Summary or Reasoning sections
+    const noChangePatterns = [
+      /no changes needed/i,
+      /no modifications needed/i,
+      /nothing to change/i,
+      /no improvements needed/i,
+      /no further changes/i,
+      /work (?:is )?complete/i,
+      /goal (?:is )?(?:fully )?(?:achieved|reached|accomplished)/i,
+      /all (?:features?|requirements?|tasks?) (?:are )?(?:implemented|complete|done)/i,
+      /everything (?:is )?(?:implemented|complete|working)/i
+    ];
+
+    // Check patterns, but only if there are no file changes present
+    // (we already checked for file changes above, so at this point we know there are none)
+    for (const pattern of noChangePatterns) {
+      if (pattern.test(content)) {
+        return true;
+      }
+    }
+
+    // If response is very short and doesn't have file changes, likely no changes
+    if (trimmed.length < 100) {
+      return true;
     }
 
     return false;

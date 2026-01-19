@@ -117,6 +117,29 @@ describe('ConvergenceAnalyzer', () => {
       assert.ok(result.reason.includes('No file modifications'));
     });
 
+    it('should converge after 2 consecutive iterations with no changes', () => {
+      analyzer.recordIteration(1, { filesModified: 5 });
+      analyzer.recordIteration(2, { filesModified: 3 });
+      analyzer.recordIteration(3, { filesModified: 0 });
+      analyzer.recordIteration(4, { filesModified: 0 });
+
+      const result = analyzer.checkConvergence();
+
+      assert.strictEqual(result.converged, true);
+      assert.strictEqual(result.confidence, 1.0);
+      assert.ok(result.reason.includes('consecutive'));
+    });
+
+    it('should not converge with only 1 iteration of no changes', () => {
+      analyzer.recordIteration(1, { filesModified: 5 });
+      analyzer.recordIteration(2, { filesModified: 3 });
+      analyzer.recordIteration(3, { filesModified: 0 });
+
+      const result = analyzer.checkConvergence();
+
+      assert.strictEqual(result.converged, false);
+    });
+
     it('should not converge when files are still being modified', () => {
       analyzer.recordIteration(1, { filesModified: 5 });
       analyzer.recordIteration(2, { filesModified: 3 });
