@@ -217,6 +217,7 @@ async function runOnce(prompt, config, quiet, resumeState = null) {
     chatChannel: config.channel,
     chatContact: config.contact,
     chatGroup: config.group,
+    webhookUrl: config.webhookUrl,
     chatProviderConfig: config.chatProviderConfig
   });
 

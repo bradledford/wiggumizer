@@ -57,6 +57,7 @@ async function listenCommand(cliOptions) {
     channel: cliOptions.channel,
     contact: cliOptions.contact,
     group: cliOptions.group,
+    webhookUrl: config.webhookUrl,
     verbose: cliOptions.verbose
   });
 

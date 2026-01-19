@@ -80,6 +80,7 @@ class RalphLoop {
       channel: options.chatChannel,
       contact: options.chatContact,
       group: options.chatGroup,
+      webhookUrl: options.webhookUrl,
       verbose: this.verbose,
       providerConfig: options.chatProviderConfig
     });
