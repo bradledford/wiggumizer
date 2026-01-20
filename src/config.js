@@ -13,7 +13,6 @@ class ConfigLoader {
     const defaults = {
       provider: 'claude',
       maxIterations: 20,
-      convergenceThreshold: 0.02,
       autoCommit: false,
       verbose: false,
       dryRun: false,
@@ -21,6 +20,23 @@ class ConfigLoader {
       context: {
         maxSize: 100000, // 100KB max context size
         maxFiles: 50     // Max 50 files
+      },
+      // Validation configuration - runs before convergence
+      validation: {
+        runTests: false,           // Run tests before declaring convergence
+        testCommand: null,         // Auto-detected based on project type (or specify manually)
+        requireTestPass: true,     // Require tests to pass for convergence
+        runBuild: false,           // Run build before declaring convergence
+        buildCommand: null,        // Auto-detected based on project type (or specify manually)
+        requireBuildSuccess: true, // Require build to succeed for convergence
+        timeout: 300000,           // 5 minutes timeout for validation commands
+        autoDetect: true,          // Automatically detect project type and commands
+        customChecks: []           // Custom validation commands
+        // Example customChecks:
+        // [
+        //   { name: 'Type Check', command: 'tsc --noEmit', required: true },
+        //   { name: 'Lint', command: 'eslint src/', required: false }
+        // ]
       },
       files: {
         include: ['**/*'], // Include all files, filter by extension in FileSelector
@@ -191,12 +207,9 @@ class ConfigLoader {
 # Default AI provider
 provider: claude
 
-# Maximum iterations before stopping
+# Maximum iterations before stopping (safety limit)
+# Work continues until PROMPT.md tasks are complete OR this limit is reached
 maxIterations: 20
-
-# Convergence threshold (0.0 to 1.0)
-# Lower = more strict convergence detection
-convergenceThreshold: 0.02
 
 # Automatically commit changes after each iteration
 autoCommit: false
@@ -204,6 +217,59 @@ autoCommit: false
 # Fast mode: use quicker model (Sonnet) with shorter responses
 # Can also be enabled with --fast flag
 fast: false
+
+# Validation - runs before declaring convergence
+# Ensures work is actually complete and functional
+validation:
+  # Auto-detection (enabled by default)
+  # Automatically detects project type and appropriate commands
+  # Supports: Node.js, Python, Java, Go, Rust, Ruby, PHP, .NET, C/C++, Swift, and more
+  autoDetect: true             # Auto-detect test/build commands from project type
+
+  runTests: false              # Set to true to run tests before converging
+  # testCommand: null          # Auto-detected (or specify manually: "npm test", "pytest", "go test", etc.)
+  requireTestPass: true        # Require tests to pass for convergence
+
+  runBuild: false              # Set to true to run build before converging
+  # buildCommand: null         # Auto-detected (or specify manually: "npm run build", "cargo build", etc.)
+  requireBuildSuccess: true    # Require build to succeed for convergence
+
+  timeout: 300000              # 5 minute timeout for validation commands
+
+  # Custom validation checks (optional)
+  # Language-agnostic examples:
+  # customChecks:
+  #   # Node.js / TypeScript
+  #   - name: "Type Check"
+  #     command: "tsc --noEmit"
+  #     required: true
+  #   - name: "Lint"
+  #     command: "eslint src/"
+  #     required: false
+  #
+  #   # Python
+  #   - name: "Type Check"
+  #     command: "mypy src/"
+  #     required: true
+  #   - name: "Lint"
+  #     command: "ruff check src/"
+  #     required: false
+  #
+  #   # Rust
+  #   - name: "Clippy"
+  #     command: "cargo clippy -- -D warnings"
+  #     required: true
+  #   - name: "Format Check"
+  #     command: "cargo fmt --check"
+  #     required: false
+  #
+  #   # Go
+  #   - name: "Vet"
+  #     command: "go vet ./..."
+  #     required: true
+  #   - name: "Format Check"
+  #     command: "gofmt -l ."
+  #     required: false
 
 # Context limits
 context:

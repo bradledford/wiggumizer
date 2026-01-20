@@ -3,12 +3,18 @@ const crypto = require('crypto');
 /**
  * Analyzes convergence patterns across iterations
  * Detects oscillation, similarity, and stability
+ * Now integrates with PromptUpdater for goal-oriented convergence
  */
 class ConvergenceAnalyzer {
   constructor(options = {}) {
-    this.threshold = options.threshold || 0.02;
+    // Remove unused threshold - it was never actually used in calculations
     this.oscillationWindow = options.oscillationWindow || 4; // Look back 4 iterations
     this.verbose = options.verbose || false;
+
+    // Goal-oriented convergence
+    this.promptUpdater = options.promptUpdater || null;
+    this.validationRunner = options.validationRunner || null;
+    this.maxIterations = options.maxIterations || 20;
 
     // History tracking
     this.iterationHistory = [];
@@ -94,51 +100,180 @@ class ConvergenceAnalyzer {
   }
 
   /**
-   * Check for convergence
+   * Check for convergence using multi-layered approach
+   *
+   * NEW CONVERGENCE STRATEGY:
+   * 1. Goal completion (PROMPT.md checkboxes) - PRIMARY signal
+   * 2. Validation passing (tests, builds) - SECONDARY signal
+   * 3. Oscillation detection - SAFETY signal (prevents infinite loops)
+   * 4. Max iterations - SAFETY limit
+   *
+   * The old approach (file quietness) is now relegated to a weak signal
    */
-  checkConvergence() {
+  async checkConvergence(currentIteration) {
     if (this.iterationHistory.length < 2) {
       return {
         converged: false,
         confidence: 0,
-        reason: 'Not enough iterations'
+        reason: 'Not enough iterations',
+        layer: 'initialization'
       };
     }
 
-    // Check for no changes in recent iterations
-    const noChangesConvergence = this.checkNoChangesConvergence();
-    if (noChangesConvergence.converged) {
-      return noChangesConvergence;
+    // LAYER 1: Check for incomplete tasks in PROMPT.md
+    // This is the PRIMARY convergence signal - if there are unchecked boxes, DON'T converge
+    if (this.promptUpdater && this.promptUpdater.loaded) {
+      const progress = this.promptUpdater.getProgress();
+      const incompleteTasks = this.promptUpdater.getIncompleteTasks();
+
+      if (progress.total > 0 && incompleteTasks.length > 0) {
+        // There are unchecked tasks - should NOT converge (unless we hit other limits)
+
+        // However, check for oscillation - if we're stuck, we need to stop
+        const oscillationCheck = this.checkOscillation();
+        if (oscillationCheck.detected) {
+          return {
+            converged: true,
+            confidence: 0.6,
+            reason: `Oscillation detected with ${incompleteTasks.length} task(s) incomplete - stopping to prevent infinite loop`,
+            layer: 'oscillation-safety',
+            oscillation: oscillationCheck,
+            incompleteTasks: incompleteTasks.map(t => t.text)
+          };
+        }
+
+        // Check if we've hit max iterations
+        if (currentIteration >= this.maxIterations) {
+          return {
+            converged: true,
+            confidence: 0.5,
+            reason: `Max iterations (${this.maxIterations}) reached with ${incompleteTasks.length} task(s) incomplete`,
+            layer: 'max-iterations-safety',
+            incompleteTasks: incompleteTasks.map(t => t.text),
+            warning: true
+          };
+        }
+
+        // Still have work to do and haven't hit limits - keep going!
+        return {
+          converged: false,
+          confidence: this.calculateProgressConfidence(progress),
+          reason: `${incompleteTasks.length} task(s) remaining in PROMPT.md`,
+          layer: 'goal-tracking',
+          progress
+        };
+      }
+
+      // All checkboxes complete! Now validate if configured
+      if (progress.total > 0 && incompleteTasks.length === 0) {
+        // LAYER 2: Run validation if configured
+        if (this.validationRunner && this.validationRunner.hasValidation()) {
+          const validationResult = await this.validationRunner.runAll();
+
+          if (!validationResult.passed) {
+            // Validation failed - keep iterating if we have budget
+            if (currentIteration >= this.maxIterations) {
+              return {
+                converged: true,
+                confidence: 0.4,
+                reason: `Max iterations reached - validation failed`,
+                layer: 'validation-failed-max-iterations',
+                validation: validationResult,
+                warning: true
+              };
+            }
+
+            return {
+              converged: false,
+              confidence: 0.3,
+              reason: `All tasks complete but ${validationResult.failureReason}`,
+              layer: 'validation',
+              validation: validationResult
+            };
+          }
+
+          // All tasks complete AND validation passed!
+          return {
+            converged: true,
+            confidence: 1.0,
+            reason: 'All tasks complete and validation passed',
+            layer: 'goal-and-validation-complete',
+            validation: validationResult,
+            progress
+          };
+        }
+
+        // No validation configured - tasks complete is enough
+        return {
+          converged: true,
+          confidence: 0.95,
+          reason: `All ${progress.total} task(s) in PROMPT.md complete`,
+          layer: 'goal-complete',
+          progress
+        };
+      }
     }
 
-    // Check for oscillation
+    // FALLBACK: No PROMPT.md tasks - use old behavior with improvements
+
+    // Check for oscillation first (safety)
     const oscillationCheck = this.checkOscillation();
     if (oscillationCheck.detected) {
       return {
-        converged: false,
-        confidence: 0,
-        reason: 'Oscillation detected',
+        converged: true,
+        confidence: 0.7,
+        reason: 'Oscillation detected - stopping to prevent infinite loop',
+        layer: 'oscillation-safety',
         oscillation: oscillationCheck
+      };
+    }
+
+    // Check for no changes (weaker signal than before)
+    const noChangesConvergence = this.checkNoChangesConvergence();
+    if (noChangesConvergence.converged) {
+      return {
+        ...noChangesConvergence,
+        layer: 'file-quietness',
+        warning: 'No PROMPT.md tasks found - using file quietness heuristic'
       };
     }
 
     // Check for stability (file hashes not changing)
     const stabilityCheck = this.checkStability();
     if (stabilityCheck.converged) {
-      return stabilityCheck;
+      return {
+        ...stabilityCheck,
+        layer: 'file-stability'
+      };
     }
 
     // Check for diminishing changes
     const diminishingCheck = this.checkDiminishingChanges();
     if (diminishingCheck.converged) {
-      return diminishingCheck;
+      return {
+        ...diminishingCheck,
+        layer: 'diminishing-changes'
+      };
     }
 
     return {
       converged: false,
       confidence: this.calculateConfidence(),
-      reason: 'Still iterating'
+      reason: 'Still iterating',
+      layer: 'active'
     };
+  }
+
+  /**
+   * Calculate confidence based on progress toward goals
+   */
+  calculateProgressConfidence(progress) {
+    if (!progress || progress.total === 0) {
+      return 0;
+    }
+
+    // Confidence increases with completion percentage
+    return progress.percentage / 100;
   }
 
   /**

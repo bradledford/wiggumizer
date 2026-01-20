@@ -34,10 +34,11 @@ describe('ConfigLoader', () => {
 
       assert.strictEqual(config.provider, 'claude');
       assert.strictEqual(config.maxIterations, 20);
-      assert.strictEqual(config.convergenceThreshold, 0.02);
       assert.strictEqual(config.autoCommit, false);
       assert.strictEqual(config.verbose, false);
       assert.strictEqual(config.dryRun, false);
+      assert.ok(config.validation); // New validation config
+      assert.strictEqual(config.validation.runTests, false);
     });
 
     it('should have correct default context limits', () => {
@@ -116,7 +117,7 @@ maxIterations: 5
       assert.strictEqual(config.maxIterations, 5);
       // Default values preserved
       assert.strictEqual(config.provider, 'claude');
-      assert.strictEqual(config.convergenceThreshold, 0.02);
+      assert.ok(config.validation); // Validation config exists
     });
 
     it('should handle nested configuration', () => {
@@ -430,7 +431,7 @@ verbose: true
       const config = ConfigLoader.load(cliOptions);
 
       // Default value (not overridden)
-      assert.strictEqual(config.convergenceThreshold, 0.02);
+      assert.ok(config.validation); // Validation config exists as default
       // Project config value
       assert.strictEqual(config.provider, 'openai');
       assert.strictEqual(config.verbose, true);

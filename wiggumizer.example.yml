@@ -4,12 +4,9 @@
 # Default AI provider
 provider: claude
 
-# Maximum iterations before stopping
+# Maximum iterations before stopping (safety limit)
+# Work continues until PROMPT.md tasks are complete OR this limit is reached
 maxIterations: 20
-
-# Convergence threshold (0.0 to 1.0)
-# Lower = more strict convergence detection
-convergenceThreshold: 0.02
 
 # Automatically commit changes after each iteration
 autoCommit: false
@@ -17,6 +14,48 @@ autoCommit: false
 # Fast mode: use quicker model (Sonnet) with shorter responses
 # Can also be enabled with --fast flag
 fast: false
+
+# Validation - runs before declaring convergence
+# Ensures work is actually complete and functional
+validation:
+  # Auto-detection (enabled by default)
+  # Automatically detects project type and appropriate commands
+  # Supports: Node.js, Python, Java, Go, Rust, Ruby, PHP, .NET, C/C++, Swift, and more
+  autoDetect: true             # Auto-detect test/build commands from project type
+
+  runTests: false              # Set to true to run tests before converging
+  # testCommand: null          # Leave null for auto-detection
+                               # Or specify manually: "npm test", "pytest", "go test", "cargo test", etc.
+  requireTestPass: true        # Require tests to pass for convergence
+
+  runBuild: false              # Set to true to run build before converging
+  # buildCommand: null         # Leave null for auto-detection
+                               # Or specify manually: "npm run build", "cargo build", "go build", etc.
+  requireBuildSuccess: true    # Require build to succeed for convergence
+
+  timeout: 300000              # 5 minute timeout for validation commands (milliseconds)
+
+  # Custom validation checks (optional, language-agnostic)
+  # customChecks:
+  #   # Node.js / TypeScript
+  #   - name: "Type Check"
+  #     command: "tsc --noEmit"
+  #     required: true
+  #
+  #   # Python
+  #   - name: "Type Check"
+  #     command: "mypy src/"
+  #     required: true
+  #
+  #   # Rust
+  #   - name: "Clippy"
+  #     command: "cargo clippy"
+  #     required: false
+  #
+  #   # Any language - linting, security scans, etc.
+  #   - name: "Security Scan"
+  #     command: "your-security-tool scan"
+  #     required: true
 
 # Context limits
 context:

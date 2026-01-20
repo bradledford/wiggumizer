@@ -9,6 +9,7 @@ const IterationJournal = require('./iteration-journal');
 const ConvergenceAnalyzer = require('./convergence-analyzer');
 const WorkspaceManager = require('./workspace-manager');
 const PromptUpdater = require('./prompt-updater');
+const ValidationRunner = require('./validation-runner');
 const { ChatNotifier } = require('./chat');
 
 class RalphLoop {
@@ -18,7 +19,6 @@ class RalphLoop {
     this.verbose = options.verbose || false;
     this.dryRun = options.dryRun || false;
     this.autoCommit = options.autoCommit || false;
-    this.convergenceThreshold = options.convergenceThreshold || 0.02;
     this.filePatterns = options.filePatterns || {};
     this.contextLimits = options.contextLimits || { maxSize: 100000, maxFiles: 50 };
     this.fast = options.fast || false;  // Fast mode for quicker iterations
@@ -36,17 +36,25 @@ class RalphLoop {
     // Initialize iteration logger
     this.logger = new IterationLogger();
 
-    // Initialize convergence analyzer
-    this.convergence = new ConvergenceAnalyzer({
-      threshold: this.convergenceThreshold,
-      verbose: this.verbose
-    });
-
     // Initialize prompt updater for work plan tracking
     this.promptUpdater = new PromptUpdater({
       promptPath: path.join(process.cwd(), options.prompt || 'PROMPT.md'),
       verbose: this.verbose,
       dryRun: this.dryRun
+    });
+
+    // Initialize validation runner
+    this.validationRunner = new ValidationRunner({
+      ...options.validation,
+      verbose: this.verbose
+    });
+
+    // Initialize convergence analyzer with goal-oriented tracking
+    this.convergence = new ConvergenceAnalyzer({
+      verbose: this.verbose,
+      promptUpdater: this.promptUpdater,
+      validationRunner: this.validationRunner,
+      maxIterations: this.maxIterations
     });
 
     // Initialize provider
@@ -359,12 +367,36 @@ class RalphLoop {
           }
         }
 
-        // Check for advanced convergence
-        const convergenceCheck = this.convergence.checkConvergence();
+        // Check for advanced convergence using new multi-layered approach
+        const convergenceCheck = await this.convergence.checkConvergence(this.iteration);
 
         if (convergenceCheck.converged) {
           console.log(chalk.green('\n✓ Convergence detected!'));
-          console.log(chalk.dim(`${convergenceCheck.reason} (confidence: ${(convergenceCheck.confidence * 100).toFixed(0)}%)\n`));
+
+          // Show warning if convergence happened due to limits rather than completion
+          if (convergenceCheck.warning) {
+            console.log(chalk.yellow(`⚠ ${convergenceCheck.reason}`));
+            if (convergenceCheck.incompleteTasks && convergenceCheck.incompleteTasks.length > 0) {
+              console.log(chalk.yellow('  Incomplete tasks:'));
+              convergenceCheck.incompleteTasks.slice(0, 5).forEach(task => {
+                console.log(chalk.dim(`    - ${task}`));
+              });
+              if (convergenceCheck.incompleteTasks.length > 5) {
+                console.log(chalk.dim(`    ... and ${convergenceCheck.incompleteTasks.length - 5} more`));
+              }
+            }
+          } else {
+            console.log(chalk.dim(`${convergenceCheck.reason} (confidence: ${(convergenceCheck.confidence * 100).toFixed(0)}%)`));
+          }
+
+          // Show validation results if present
+          if (convergenceCheck.validation && convergenceCheck.validation.results.length > 0) {
+            console.log(chalk.blue('\nValidation results:'));
+            console.log(this.validationRunner.formatResults(convergenceCheck.validation.results));
+          }
+
+          console.log(); // blank line
+
           converged = true;
           convergenceReason = convergenceCheck.reason;
 
@@ -375,7 +407,9 @@ class RalphLoop {
             filesModified,
             convergence: true,
             convergenceReason: convergenceCheck.reason,
-            convergenceConfidence: convergenceCheck.confidence
+            convergenceConfidence: convergenceCheck.confidence,
+            convergenceLayer: convergenceCheck.layer,
+            validation: convergenceCheck.validation
           });
 
           break;
@@ -387,9 +421,14 @@ class RalphLoop {
           console.log(chalk.dim(`    Consider refining your prompt to avoid flip-flopping`));
         }
 
-        // Show convergence confidence in verbose mode
-        if (this.verbose && convergenceCheck.confidence > 0) {
-          console.log(chalk.dim(`  Convergence confidence: ${(convergenceCheck.confidence * 100).toFixed(0)}%`));
+        // Show progress toward goals in verbose mode
+        if (this.verbose) {
+          if (convergenceCheck.progress && convergenceCheck.progress.total > 0) {
+            console.log(chalk.dim(`  Progress: ${convergenceCheck.progress.completed}/${convergenceCheck.progress.total} tasks (${convergenceCheck.progress.percentage}%)`));
+          }
+          if (convergenceCheck.confidence > 0) {
+            console.log(chalk.dim(`  Convergence confidence: ${(convergenceCheck.confidence * 100).toFixed(0)}%`));
+          }
         }
 
         // Log iteration

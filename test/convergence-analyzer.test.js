@@ -7,23 +7,25 @@ describe('ConvergenceAnalyzer', () => {
   let analyzer;
 
   beforeEach(() => {
-    analyzer = new ConvergenceAnalyzer({ threshold: 0.02 });
+    analyzer = new ConvergenceAnalyzer({ maxIterations: 20 });
   });
 
   describe('constructor', () => {
     it('should use default options', () => {
       const a = new ConvergenceAnalyzer();
-      assert.strictEqual(a.threshold, 0.02);
       assert.strictEqual(a.oscillationWindow, 4);
+      assert.strictEqual(a.maxIterations, 20);
+      assert.strictEqual(a.promptUpdater, null);
+      assert.strictEqual(a.validationRunner, null);
     });
 
     it('should accept custom options', () => {
       const a = new ConvergenceAnalyzer({
-        threshold: 0.05,
-        oscillationWindow: 6
+        oscillationWindow: 6,
+        maxIterations: 30
       });
-      assert.strictEqual(a.threshold, 0.05);
       assert.strictEqual(a.oscillationWindow, 6);
+      assert.strictEqual(a.maxIterations, 30);
     });
   });
 
@@ -96,56 +98,56 @@ describe('ConvergenceAnalyzer', () => {
   });
 
   describe('checkConvergence', () => {
-    it('should not converge with insufficient history', () => {
+    it('should not converge with insufficient history', async () => {
       analyzer.recordIteration(1, { filesModified: 5 });
 
-      const result = analyzer.checkConvergence();
+      const result = await analyzer.checkConvergence(1);
 
       assert.strictEqual(result.converged, false);
       assert.strictEqual(result.confidence, 0);
     });
 
-    it('should converge when no changes for multiple iterations', () => {
+    it('should converge when no changes for multiple iterations', async () => {
       for (let i = 1; i <= 5; i++) {
         analyzer.recordIteration(i, { filesModified: 0 });
       }
 
-      const result = analyzer.checkConvergence();
+      const result = await analyzer.checkConvergence(5);
 
       assert.strictEqual(result.converged, true);
       assert.strictEqual(result.confidence, 1.0);
       assert.ok(result.reason.includes('No file modifications'));
     });
 
-    it('should converge after 2 consecutive iterations with no changes', () => {
+    it('should converge after 2 consecutive iterations with no changes', async () => {
       analyzer.recordIteration(1, { filesModified: 5 });
       analyzer.recordIteration(2, { filesModified: 3 });
       analyzer.recordIteration(3, { filesModified: 0 });
       analyzer.recordIteration(4, { filesModified: 0 });
 
-      const result = analyzer.checkConvergence();
+      const result = await analyzer.checkConvergence(4);
 
       assert.strictEqual(result.converged, true);
       assert.strictEqual(result.confidence, 1.0);
       assert.ok(result.reason.includes('consecutive'));
     });
 
-    it('should not converge with only 1 iteration of no changes', () => {
+    it('should not converge with only 1 iteration of no changes', async () => {
       analyzer.recordIteration(1, { filesModified: 5 });
       analyzer.recordIteration(2, { filesModified: 3 });
       analyzer.recordIteration(3, { filesModified: 0 });
 
-      const result = analyzer.checkConvergence();
+      const result = await analyzer.checkConvergence(3);
 
       assert.strictEqual(result.converged, false);
     });
 
-    it('should not converge when files are still being modified', () => {
+    it('should not converge when files are still being modified', async () => {
       analyzer.recordIteration(1, { filesModified: 5 });
       analyzer.recordIteration(2, { filesModified: 3 });
       analyzer.recordIteration(3, { filesModified: 2 });
 
-      const result = analyzer.checkConvergence();
+      const result = await analyzer.checkConvergence(3);
 
       assert.strictEqual(result.converged, false);
     });
