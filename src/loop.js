@@ -193,12 +193,14 @@ class RalphLoop {
         // Get current codebase state
         const codebaseContext = this.getCodebaseContext();
 
-        // For Claude CLI provider, snapshot git status before iteration
+        // For Claude CLI provider, snapshot file modification times before iteration
         // Claude CLI modifies files directly via its tools, not via diffs in the response
+        // We use file snapshots (mtimes) instead of just the list of modified files,
+        // because a file already in git status can still be modified further
         const isCliProvider = this.provider.constructor.name === 'ClaudeCliProvider';
-        let gitFilesBefore = [];
+        let fileSnapshotBefore = new Map();
         if (isCliProvider && !this.dryRun) {
-          gitFilesBefore = GitHelper.getModifiedFiles();
+          fileSnapshotBefore = GitHelper.getFileSnapshot();
         }
 
         // Set up streaming output handler for all providers
@@ -297,13 +299,21 @@ class RalphLoop {
           // For Claude CLI provider, detect files modified via git status comparison
           // (Claude CLI modifies files directly via its tools, not via diffs)
           if (isCliProvider) {
-            const gitFilesAfter = GitHelper.getModifiedFiles();
-            // Find files that are newly modified (in after but not in before)
-            modifiedFilesList = gitFilesAfter.filter(f => !gitFilesBefore.includes(f));
+            // Compare file snapshots to detect changes (even to files already in git status)
+            const fileSnapshotAfter = GitHelper.getFileSnapshot();
+            modifiedFilesList = GitHelper.compareSnapshots(fileSnapshotBefore, fileSnapshotAfter);
             filesModified = modifiedFilesList.length;
 
             if (this.verbose && filesModified > 0) {
               console.log(chalk.dim(`    Detected via git: ${modifiedFilesList.join(', ')}`));
+            }
+
+            // Auto-commit for CLI provider (when enabled)
+            if (filesModified > 0 && this.autoCommit && GitHelper.isGitRepo()) {
+              const committed = GitHelper.createBackupCommit(this.iteration);
+              if (committed && this.verbose) {
+                console.log(chalk.dim(`    Git: Auto-committed iteration ${this.iteration}`));
+              }
             }
           } else {
             // For API provider, apply diffs from response

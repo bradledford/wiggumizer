@@ -56,7 +56,10 @@ class ClaudeCliProvider {
       '--model', this.model,
       '--system-prompt', systemPrompt,
       // Enable file editing and tool permissions - without this, Claude CLI cannot modify files
-      '--allowedTools', 'Edit,Write,Read,Glob,Grep,Bash'
+      '--allowedTools', 'Edit,Write,Read,Glob,Grep,Bash',
+      // Prevent Claude from running git commands that modify repo state
+      // This ensures autoCommit flag is respected - git operations are managed externally
+      '--disallowedTools', 'Bash(git:*)'
     ];
 
     // Enable streaming JSON output if callback provided
@@ -72,7 +75,7 @@ class ClaudeCliProvider {
     // args.push(userMessage);
 
     if (this.verbose) {
-      console.log(chalk.dim(`\nExecuting: claude -p --model ${this.model} --allowedTools Edit,Write,Read,Glob,Grep,Bash --output-format stream-json --include-partial-messages --verbose`));
+      console.log(chalk.dim(`\nExecuting: claude -p --model ${this.model} --allowedTools Edit,Write,Read,Glob,Grep,Bash --disallowedTools 'Bash(git:*)' --output-format stream-json --include-partial-messages --verbose`));
       console.log(chalk.dim(`User message length: ${userMessage.length} chars (via stdin)`));
     }
 
@@ -263,7 +266,10 @@ TOOLS (you MUST use these):
 - **Read**: Read files (e.g., Read src/index.js)
 - **Edit**: Modify files with precise string replacement
 - **Write**: Create new files
-- **Bash**: Run commands (git, npm test, etc.)
+- **Bash**: Run commands (npm test, build scripts, etc.)
+
+IMPORTANT: Do NOT use git commit, git add, or any git commands that modify the repository state.
+Git operations are managed externally. Focus only on code changes.
 
 OUTPUT FORMAT:
 ## Reasoning:
@@ -309,7 +315,10 @@ You have access to local filesystem tools. The codebase is NOT pre-loaded - you 
 3. **Read**: Read file contents (e.g., Read src/index.js)
 4. **Edit**: Modify files with precise string replacement
 5. **Write**: Create new files
-6. **Bash**: Run commands (git, npm test, etc.)
+6. **Bash**: Run commands (npm test, build scripts, etc.)
+
+IMPORTANT: Do NOT use git commit, git add, or any git commands that modify the repository state.
+Git operations are managed externally by the orchestration system. Focus only on code changes.
 
 SELF-DISCOVERY PROTOCOL (follow this every iteration):
 1. **INVESTIGATE**: Use Glob/Grep to find relevant files, then Read to examine them
@@ -422,7 +431,7 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
     message += `- **Read**: Read any file (e.g., Read src/index.js)\n`;
     message += `- **Grep**: Search for patterns (e.g., Grep "function.*export")\n`;
     message += `- **Glob**: Find files by pattern (e.g., Glob "src/**/*.js")\n`;
-    message += `- **Bash**: Run commands (e.g., git log, npm test)\n`;
+    message += `- **Bash**: Run commands (e.g., npm test, build scripts)\n`;
     message += `- **Edit**: Modify files with precise string replacement\n`;
     message += `- **Write**: Create new files\n\n`;
 
@@ -462,7 +471,7 @@ REMEMBER: The codebase is NOT in this prompt. You MUST use your tools to discove
     // Simple, constant instructions (no variation by iteration)
     message += `\n---\n\n`;
     message += `Use your tools to explore the codebase and make substantial progress toward the goal.\n`;
-    message += `Remember: You are building on your own prior work. Use git history and breadcrumbs to understand context.\n`;
+    message += `Remember: You are building on your own prior work. The git history is provided above - use it and breadcrumbs to understand context.\n`;
     message += `Start by using Glob/Grep to find relevant files, then Read to examine them.`;
 
     return message;

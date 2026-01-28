@@ -245,5 +245,44 @@ describe('GitHelper', () => {
       assert.ok(newlyModified.includes('initial.txt'));
       assert.ok(!newlyModified.includes('preexisting.txt'));
     });
+
+    it('should detect changes to files already in git status using snapshots', async () => {
+      // This test validates the fix for the CLI provider iteration detection bug.
+      // The bug: if a file was already modified before an iteration started,
+      // and Claude CLI modified it again during the iteration, the old list-based
+      // comparison would NOT detect it (since the file was in both before and after lists).
+      // The fix: use file modification times (mtimes) to detect actual changes.
+
+      // Create an initial modified file (simulating dirty working directory)
+      fs.writeFileSync(path.join(testDir, 'alreadyDirty.txt'), 'initial dirty content', 'utf-8');
+
+      // Get state BEFORE iteration using the new snapshot approach
+      const snapshotBefore = GitHelper.getFileSnapshot(testDir);
+      assert.strictEqual(snapshotBefore.size, 1);
+      assert.ok(snapshotBefore.has('alreadyDirty.txt'));
+
+      // Wait a small amount to ensure mtime will be different
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Simulate Claude CLI modifying the SAME file again during the iteration
+      fs.writeFileSync(path.join(testDir, 'alreadyDirty.txt'), 'updated dirty content', 'utf-8');
+
+      // Get state AFTER iteration
+      const snapshotAfter = GitHelper.getFileSnapshot(testDir);
+
+      // Compare using snapshots - this should detect the change!
+      const changed = GitHelper.compareSnapshots(snapshotBefore, snapshotAfter);
+
+      // The file should be detected as changed (mtime is different)
+      assert.strictEqual(changed.length, 1);
+      assert.ok(changed.includes('alreadyDirty.txt'));
+
+      // Verify that the OLD approach would have MISSED this change:
+      const filesBefore = ['alreadyDirty.txt']; // what getModifiedFiles would return
+      const filesAfter = GitHelper.getModifiedFiles(testDir); // still just ['alreadyDirty.txt']
+      const oldApproachResult = filesAfter.filter(f => !filesBefore.includes(f));
+      // Old approach returns empty array - it missed the change!
+      assert.strictEqual(oldApproachResult.length, 0, 'Old approach should miss the change (this proves the bug)');
+    });
   });
 });
