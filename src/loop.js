@@ -3,6 +3,7 @@ const chalk = require('chalk');
 const ora = require('ora');
 const ClaudeProvider = require('./providers/claude');
 const ClaudeCliProvider = require('./providers/claude-cli');
+const AiSdkProvider = require('./providers/ai-sdk');
 const GitHelper = require('./git-helper');
 const IterationLogger = require('./iteration-logger');
 const IterationJournal = require('./iteration-journal');
@@ -78,6 +79,14 @@ class RalphLoop {
         fast: this.fast  // Pass fast mode flag for condensed prompts
       };
       this.provider = new ClaudeCliProvider(providerConfig);
+    } else if (providerName === 'ai-sdk') {
+      // AI SDK provider - supports OpenAI, Anthropic, Google, Mistral, etc.
+      const providerConfig = {
+        ...(options.providerConfig?.['ai-sdk'] || {}),
+        verbose: this.verbose,
+        fast: this.fast  // Pass fast mode flag for condensed prompts
+      };
+      this.provider = new AiSdkProvider(providerConfig);
     } else {
       throw new Error(`Provider ${providerName} not yet implemented. Coming soon!`);
     }

@@ -19,7 +19,7 @@ program
   .command('run')
   .description('Run a Ralph loop to iteratively refine code')
   .option('-p, --prompt <file>', 'Prompt file to use', 'PROMPT.md')
-  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER)
+  .option('-P, --provider <name>', 'AI provider (claude, claude-cli, ai-sdk)', process.env.WIGGUMIZER_PROVIDER)
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('-q, --quiet', 'Minimal output (only errors and final result)')
@@ -170,7 +170,7 @@ multiCommand
   .command('run')
   .description('Run Ralph loop across all configured workspaces')
   .option('-p, --prompt <file>', 'Prompt file to use', 'PROMPT.md')
-  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER)
+  .option('-P, --provider <name>', 'AI provider (claude, claude-cli, ai-sdk)', process.env.WIGGUMIZER_PROVIDER)
   .option('-m, --max-iterations <num>', 'Maximum iterations', '20')
   .option('-v, --verbose', 'Verbose output')
   .option('-q, --quiet', 'Minimal output')
@@ -218,7 +218,7 @@ program
 program
   .command('listen')
   .description('Listen for messages and respond with Ralph Wiggum style')
-  .option('-P, --provider <name>', 'AI provider to use', process.env.WIGGUMIZER_PROVIDER)
+  .option('-P, --provider <name>', 'AI provider (claude, claude-cli, ai-sdk)', process.env.WIGGUMIZER_PROVIDER)
   .option('--chat-provider <name>', 'Chat service provider (slack, whatsapp)', 'slack')
   .option('--channel <name>', 'Slack channel to listen on (e.g., #random)')
   .option('--contact <phone>', 'WhatsApp contact to listen to')
@@ -262,6 +262,28 @@ program
       console.log(chalk.green('✓') + ' OpenAI API key found');
     } else {
       console.log(chalk.yellow('⚠') + ' OpenAI API key not found (optional)');
+    }
+
+    // Check for AI SDK packages
+    try {
+      require.resolve('ai');
+      console.log(chalk.green('✓') + ' AI SDK (ai) installed');
+    } catch (e) {
+      console.log(chalk.dim('○') + ' AI SDK not installed (optional: npm install ai)');
+    }
+
+    const aiSdkProviders = ['openai', 'anthropic', 'google', 'mistral', 'cohere', 'groq'];
+    const installedProviders = aiSdkProviders.filter(p => {
+      try {
+        require.resolve(`@ai-sdk/${p}`);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    if (installedProviders.length > 0) {
+      console.log(chalk.green('✓') + ` AI SDK providers: ${installedProviders.join(', ')}`);
     }
 
     // Check for config file

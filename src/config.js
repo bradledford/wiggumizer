@@ -77,6 +77,13 @@ class ConfigLoader {
         openai: {
           model: 'gpt-5',
           maxTokens: 16384  // Increased from 8K to allow larger responses
+        },
+        // AI SDK providers - use Vercel AI SDK for multi-provider support
+        // Requires: npm install ai @ai-sdk/<provider-name>
+        'ai-sdk': {
+          provider: 'openai',   // AI SDK provider: openai, anthropic, google, mistral, cohere, etc.
+          model: 'gpt-5',      // Model name for the chosen provider
+          maxTokens: 16384
         }
       },
       // Fast mode overrides - used when --fast flag is enabled
@@ -93,6 +100,11 @@ class ConfigLoader {
           },
           openai: {
             model: 'gpt-4o-mini',  // Faster OpenAI model
+            maxTokens: 8192
+          },
+          'ai-sdk': {
+            provider: 'openai',
+            model: 'gpt-4o-mini',  // Faster model for AI SDK
             maxTokens: 8192
           }
         }
@@ -335,6 +347,25 @@ providers:
   openai:
     model: gpt-5
     maxTokens: 16384  # Increased from 8K to allow larger responses
+
+  # AI SDK - Use Vercel AI SDK for multi-provider support
+  # Supports: OpenAI, Anthropic, Google, Mistral, Cohere, Amazon Bedrock, and more
+  # See: https://ai-sdk.dev/docs/foundations/providers-and-models
+  #
+  # Installation:
+  #   npm install ai                  # Core AI SDK
+  #   npm install @ai-sdk/openai      # For OpenAI
+  #   npm install @ai-sdk/anthropic   # For Anthropic
+  #   npm install @ai-sdk/google      # For Google (Gemini)
+  #   npm install @ai-sdk/mistral     # For Mistral
+  #
+  # Example configuration:
+  # provider: ai-sdk
+  # providers:
+  #   ai-sdk:
+  #     provider: openai              # AI SDK provider name
+  #     model: gpt-4o                 # Model for that provider
+  #     maxTokens: 16384
 
 # Chat service notifications
 # Send notifications to Slack/WhatsApp on completion or errors
