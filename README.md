@@ -52,7 +52,7 @@ wiggumize run
 Pre-built templates for common tasks: refactoring, testing, documentation, feature implementation.
 
 ### 🔄 Multi-Provider Support
-Works with Claude, GPT, Sourcegraph Amp, Ollama, and local models. Switch providers seamlessly.
+Works with Claude, GPT-4, Gemini, Mistral, Cohere, and 15+ other providers via [AI SDK](https://ai-sdk.dev/). Switch providers seamlessly.
 
 ### 🚀 Multi-Repo Orchestration
 Run Ralph loops across multiple repositories simultaneously. Coordinate changes across your entire stack.
@@ -253,13 +253,72 @@ wiggumize run --provider claude-cli
 
 **Note:** The CLI provider has simplified error handling (no automatic retries) but works great for most use cases.
 
+### AI SDK (Multi-Provider)
+Uses [Vercel's AI SDK](https://ai-sdk.dev/) for access to 15+ AI providers with a unified API.
+
+```bash
+# Install the AI SDK core package
+npm install ai
+
+# Install your preferred provider(s)
+npm install @ai-sdk/openai      # OpenAI (GPT-4, GPT-4o)
+npm install @ai-sdk/anthropic   # Anthropic (Claude)
+npm install @ai-sdk/google      # Google (Gemini)
+npm install @ai-sdk/mistral     # Mistral
+npm install @ai-sdk/cohere      # Cohere
+npm install @ai-sdk/groq        # Groq
+npm install @ai-sdk/amazon-bedrock  # Amazon Bedrock
+
+# Set your API key
+export OPENAI_API_KEY=your-key-here
+
+# Run with AI SDK
+wiggumize run --provider ai-sdk
+```
+
+**Supported Providers:**
+- OpenAI (GPT-4, GPT-4o, GPT-4o-mini)
+- Anthropic (Claude 3, Claude 3.5)
+- Google (Gemini Pro, Gemini Ultra)
+- Mistral (Mistral Large, Mixtral)
+- Cohere (Command, Command-R)
+- Groq (Llama, Mixtral)
+- Amazon Bedrock
+- Azure OpenAI
+- Perplexity
+- xAI (Grok)
+- DeepSeek
+- Together AI
+- Fireworks
+- Cerebras
+
+**Best for:**
+- Using non-Claude models (GPT-4, Gemini, Mistral, etc.)
+- Switching between providers easily
+- Experimenting with different models
+- Organizations with existing AI SDK infrastructure
+
+**Configuration:**
+```yaml
+# .wiggumizer.yml
+provider: ai-sdk
+
+providers:
+  ai-sdk:
+    provider: openai    # AI SDK provider name
+    model: gpt-4o       # Model for that provider
+    maxTokens: 16384
+```
+
+See the [AI SDK documentation](https://ai-sdk.dev/docs/foundations/providers-and-models) for all available providers and models.
+
 ## Configuration
 
 Create `.wiggumizer.yml` in your project:
 
 ```yaml
 # Choose your provider
-provider: claude  # or 'claude-cli'
+provider: claude  # or 'claude-cli', 'ai-sdk'
 
 # Provider-specific settings
 providers:
@@ -268,6 +327,10 @@ providers:
     maxTokens: 16384
   claude-cli:
     model: claude-opus-4-5-20251101
+    maxTokens: 16384
+  ai-sdk:
+    provider: openai    # or anthropic, google, mistral, cohere, groq, etc.
+    model: gpt-4o       # model name for the chosen provider
     maxTokens: 16384
 
 defaults:
